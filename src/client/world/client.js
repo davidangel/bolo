@@ -282,7 +282,14 @@ class BoloClientWorld extends ClientWorld {
     const mapName = mapSelect ? mapSelect.value : '';
     const url = mapName ? `/create?map=${encodeURIComponent(mapName)}` : '/create';
     return fetch(url).then(res => res.json()).then(data => {
-      if (data && data.gid) { location.search = `?${data.gid}`; }
+      if (data && data.gid) {
+        if (data.url) {
+          navigator.clipboard.writeText(data.url).then(() => {
+            this.vignette.message('Game URL copied to clipboard!');
+          }).catch(() => {});
+        }
+        location.search = `?${data.gid}`;
+      }
       else { this.vignette.message('Create failed'); }
     }).catch(() => { return this.vignette.message('Create failed'); });
   }
