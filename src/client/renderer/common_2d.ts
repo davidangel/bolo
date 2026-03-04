@@ -94,12 +94,13 @@ export default class Common2dRenderer extends BaseRenderer {
   }
 
   centerOn(x: number, y: number, cb: (left: number, top: number, width: number, height: number) => void): void {
-    if (!this.ctx) { return; }
-    this.ctx.save();
+    const ctx = this.ctx;
+    if (!ctx || typeof ctx.save !== 'function' || typeof ctx.restore !== 'function') { return; }
+    ctx.save();
     const [left, top, width, height] = this.getViewAreaAtWorld(x, y);
-    this.ctx.translate(-left, -top);
+    ctx.translate(-left, -top);
     cb(left, top, width, height);
-    this.ctx.restore();
+    ctx.restore();
   }
 
   drawBuilderIndicator(b: any): void {
