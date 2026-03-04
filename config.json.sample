@@ -16,8 +16,8 @@
       "channels": ["#mytestchannel"],
       "log": true,
       "user": {
-        "username": "orona",
-        "realname": "Orona Bot"
+        "username": "bolo",
+        "realname": "Bolo Bot"
       },
       "admin": "~me@myprovider.net"
     }

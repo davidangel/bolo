@@ -1,11 +1,11 @@
 {
-  "name": "orona",
+  "name": "bolo",
   "version": "0.1.91",
   "description": "Bolo, a game of tank warfare, rewritten for modern browsers.",
-  "homepage": "http://stephank.github.com/orona/",
+  "homepage": "https://github.com/davidangel/bolo",
   "repository": {
     "type": "git",
-    "url": "http://github.com/stephank/orona.git"
+    "url": "https://github.com/davidangel/bolo.git"
   },
   "author": {
     "name": "Stéphan Kochen",

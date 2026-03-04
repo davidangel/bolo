@@ -1,4 +1,4 @@
-// Orona uses two WebSocket connections during play. The first is the lobby connection, which is
+// Bolo uses two WebSocket connections during play. The first is the lobby connection, which is
 // always open, and is also used for in-game chat. The second is used for world synchronization.
 
 // Server message identifiers. The server sends binary data (encoded as base64).

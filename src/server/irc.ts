@@ -38,7 +38,7 @@ class BoloIrc {
     this.didAddressMe = new RegExp(`^${options.nick}[:, ]+(.+?)\\s*$`, 'i');
 
     const server = options.server || 'localhost';
-    const nick = options.nick || 'OronaBot';
+    const nick = options.nick || 'BoloBot';
     const clientOptions = {
       userName: options.user?.username,
       realName: options.user?.realname,

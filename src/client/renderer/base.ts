@@ -356,7 +356,7 @@ export default class BaseRenderer {
     }
     if (location.hostname.split('.')[1] === 'github' || location.hostname.substr(-6) === '.no.de') {
       const link = document.createElement('a');
-      link.href = 'https://github.com/stephank/orona';
+      link.href = 'https://github.com/davidangel/bolo';
       link.style.cssText = 'position:absolute;top:0;right:0';
       link.innerHTML = '<img src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub">';
       this.hud!.appendChild(link);

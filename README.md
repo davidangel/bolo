@@ -99,7 +99,7 @@ All the graphic and sound files are from:
 
  * [Bolo], © 1993 Stuart Cheshire.
 
-For the browser client, Bolo/Orona also bundles:
+For the browser client, Bolo also bundles:
 
  * [Sizzle], © 2010 The Dojo Foundation, licensed MIT, BSD and GPL.
  * Components that are part of [Villain].
