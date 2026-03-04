@@ -13,6 +13,19 @@ export default class Common2dRenderer extends BaseRenderer {
   overlay!: Uint8ClampedArray;
   declare prestyled: Record<number, HTMLCanvasElement | HTMLImageElement>;
 
+  private ensureCtx(): CanvasRenderingContext2D | null {
+    const existing = this.ctx;
+    if (existing && typeof existing.save === 'function' && typeof existing.restore === 'function') {
+      return existing;
+    }
+    const recovered = this.canvas.getContext('2d');
+    if (!recovered) {
+      return null;
+    }
+    this.ctx = recovered;
+    return recovered;
+  }
+
   setup(): void {
     try {
       this.ctx = this.canvas.getContext('2d')!;
@@ -36,11 +49,15 @@ export default class Common2dRenderer extends BaseRenderer {
   }
 
   setObjectOpacity(opacity: number): void {
-    this.ctx.globalAlpha = opacity;
+    const ctx = this.ensureCtx();
+    if (!ctx) { return; }
+    ctx.globalAlpha = opacity;
   }
 
   drawTile(tx: number, ty: number, dx: number, dy: number, ctx?: CanvasRenderingContext2D): void {
-    (ctx || this.ctx).drawImage(
+    const target = ctx || this.ensureCtx();
+    if (!target) { return; }
+    target.drawImage(
       this.images.base as HTMLImageElement,
       tx * TILE_SIZE_PIXELS, ty * TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS,
       dx,                    dy,                    TILE_SIZE_PIXELS, TILE_SIZE_PIXELS
@@ -85,7 +102,9 @@ export default class Common2dRenderer extends BaseRenderer {
     } else {
       source = this.images.styled as HTMLImageElement;
     }
-    (ctx || this.ctx).drawImage(
+    const target = ctx || this.ensureCtx();
+    if (!target) { return; }
+    target.drawImage(
       source,
       tx * TILE_SIZE_PIXELS, ty * TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS,
       dx,                    dy,                    TILE_SIZE_PIXELS, TILE_SIZE_PIXELS
@@ -93,14 +112,18 @@ export default class Common2dRenderer extends BaseRenderer {
   }
 
   centerOn(x: number, y: number, cb: (left: number, top: number, width: number, height: number) => void): void {
-    this.ctx.save();
+    const ctx = this.ensureCtx();
+    if (!ctx) { return; }
+    ctx.save();
     const [left, top, width, height] = this.getViewAreaAtWorld(x, y);
-    this.ctx.translate(-left, -top);
+    ctx.translate(-left, -top);
     cb(left, top, width, height);
-    this.ctx.restore();
+    ctx.restore();
   }
 
   drawBuilderIndicator(b: any): void {
+    const ctx = this.ensureCtx();
+    if (!ctx) { return; }
     const player = b.owner.$;
     const dist = distance(player, b);
     if (dist <= 128) { return; }
@@ -108,30 +131,32 @@ export default class Common2dRenderer extends BaseRenderer {
     const px = player.x / PIXEL_SIZE_WORLD;
     const py = player.y / PIXEL_SIZE_WORLD;
 
-    this.ctx.save();
-    this.ctx.globalCompositeOperation = 'source-over';
-    this.ctx.globalAlpha = min(1.0, (dist - 128) / 1024);
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = min(1.0, (dist - 128) / 1024);
     const offset = min(50, (dist / 10240) * 50) + 32;
     let rad = heading(player, b);
-    this.ctx.beginPath();
+    ctx.beginPath();
     const x = px + cos(rad) * offset;
     const y = py + sin(rad) * offset;
-    this.ctx.moveTo(x, y);
+    ctx.moveTo(x, y);
     rad += PI;
-    this.ctx.lineTo(x + cos(rad - 0.4) * 10, y + sin(rad - 0.4) * 10);
-    this.ctx.lineTo(x + cos(rad + 0.4) * 10, y + sin(rad + 0.4) * 10);
-    this.ctx.closePath();
-    this.ctx.fillStyle = 'yellow';
-    this.ctx.fill();
-    this.ctx.restore();
+    ctx.lineTo(x + cos(rad - 0.4) * 10, y + sin(rad - 0.4) * 10);
+    ctx.lineTo(x + cos(rad + 0.4) * 10, y + sin(rad + 0.4) * 10);
+    ctx.closePath();
+    ctx.fillStyle = 'yellow';
+    ctx.fill();
+    ctx.restore();
   }
 
   drawNames(): void {
-    this.ctx.save();
-    this.ctx.strokeStyle = this.ctx.fillStyle = 'white';
-    this.ctx.font = 'bold 11px sans-serif';
-    this.ctx.textBaseline = 'alphabetic';
-    this.ctx.textAlign = 'left';
+    const ctx = this.ensureCtx();
+    if (!ctx) { return; }
+    ctx.save();
+    ctx.strokeStyle = ctx.fillStyle = 'white';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
     const { player } = this.world;
 
     for (const tank of this.world.tanks) {
@@ -146,21 +171,21 @@ export default class Common2dRenderer extends BaseRenderer {
         } else {
           alpha = 1.0;
         }
-        this.ctx.globalAlpha = alpha;
+        ctx.globalAlpha = alpha;
 
-        const metrics = this.ctx.measureText(tank.name);
+        const metrics = ctx.measureText(tank.name);
         const tx = round(tank.x / PIXEL_SIZE_WORLD) + 16;
         const ty = round(tank.y / PIXEL_SIZE_WORLD) - 16;
-        this.ctx.beginPath();
-        this.ctx.moveTo(tx, ty);
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
         const nx = tx + 12;
         const ny = ty - 9;
-        this.ctx.lineTo(nx, ny);
-        this.ctx.lineTo(nx + metrics.width, ny);
-        this.ctx.stroke();
-        this.ctx.fillText(tank.name, nx, ny - 2);
+        ctx.lineTo(nx, ny);
+        ctx.lineTo(nx + metrics.width, ny);
+        ctx.stroke();
+        ctx.fillText(tank.name, nx, ny - 2);
       }
     }
-    this.ctx.restore();
+    ctx.restore();
   }
 }

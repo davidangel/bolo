@@ -101,6 +101,7 @@ const BoloClientWorldMixin = {
   // Common initialization once the map is available.
   commonInitialization(this: any) {
     this.renderer = new DefaultRenderer(this);
+    this._renderFailed = false;
 
     this.map.world = this;
     this.map.setView(this.renderer);
@@ -110,7 +111,19 @@ const BoloClientWorldMixin = {
     this.loop = createLoop({
       rate: TICK_LENGTH_MS,
       tick: () => this.tick(),
-      frame: () => this.renderer.draw()
+      frame: () => {
+        if (this._renderFailed) { return; }
+        try {
+          this.renderer.draw();
+        } catch (e) {
+          this._renderFailed = true;
+          if (this.loop != null) {
+            this.loop.stop();
+          }
+          console.error('Renderer failure:', e);
+          this.failure('Rendering failed. Please reload the page.');
+        }
+      }
     });
 
     this.increasingRange = false;
