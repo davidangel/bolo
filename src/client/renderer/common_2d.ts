@@ -36,6 +36,7 @@ export default class Common2dRenderer extends BaseRenderer {
   }
 
   setObjectOpacity(opacity: number): void {
+    if (!this.ctx) { return; }
     this.ctx.globalAlpha = opacity;
   }
 
@@ -93,6 +94,7 @@ export default class Common2dRenderer extends BaseRenderer {
   }
 
   centerOn(x: number, y: number, cb: (left: number, top: number, width: number, height: number) => void): void {
+    if (!this.ctx) { return; }
     this.ctx.save();
     const [left, top, width, height] = this.getViewAreaAtWorld(x, y);
     this.ctx.translate(-left, -top);
@@ -101,6 +103,7 @@ export default class Common2dRenderer extends BaseRenderer {
   }
 
   drawBuilderIndicator(b: any): void {
+    if (!this.ctx) { return; }
     const player = b.owner.$;
     const dist = distance(player, b);
     if (dist <= 128) { return; }
@@ -127,6 +130,7 @@ export default class Common2dRenderer extends BaseRenderer {
   }
 
   drawNames(): void {
+    if (!this.ctx) { return; }
     this.ctx.save();
     this.ctx.strokeStyle = this.ctx.fillStyle = 'white';
     this.ctx.font = 'bold 11px sans-serif';
