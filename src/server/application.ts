@@ -12,6 +12,7 @@ import ServerWorld from 'villain/world/net/server';
 import { pack } from 'villain/struct';
 import WebSocket from 'faye-websocket';
 import MapIndex from './map_index';
+import gameLogger from './game_logger';
 import * as helpers from '../helpers';
 import BoloWorldMixin from '../world_mixin';
 import { registerWithWorld } from '../objects/all';
@@ -27,6 +28,9 @@ class BoloServerWorld extends ServerWorld {
   authority: boolean = true;
   clients: WebSocket[] = [];
   oddTick: boolean = false;
+  gameOverTimer: number | null = null;
+  gameEndLogged: boolean = false;
+  winningTeam: 'red' | 'blue' | null = null;
   gid: string = '';
   url: string = '';
   lastActivity: number = 0;
@@ -57,7 +61,51 @@ class BoloServerWorld extends ServerWorld {
   // Update, and then send packets to the client.
   tick(): void {
     super.tick();
+    this.checkGameEnd();
     this.sendPackets();
+  }
+
+  checkGameEnd(): void {
+    if (this.gameEndLogged || !this.map?.bases || this.map.bases.length === 0) {
+      return;
+    }
+
+    let redBases = 0;
+    let blueBases = 0;
+    let neutralBases = 0;
+
+    for (const base of this.map.bases as any[]) {
+      if (base.team === 0) {
+        redBases++;
+      } else if (base.team === 1) {
+        blueBases++;
+      } else {
+        neutralBases++;
+      }
+    }
+
+    let winner: 'red' | 'blue' | null = null;
+    if (neutralBases === 0 && redBases > 0 && blueBases === 0) {
+      winner = 'red';
+    } else if (neutralBases === 0 && blueBases > 0 && redBases === 0) {
+      winner = 'blue';
+    }
+
+    if (!winner) {
+      this.gameOverTimer = null;
+      return;
+    }
+
+    if (this.gameOverTimer == null) {
+      this.gameOverTimer = 50;
+    }
+
+    if (--this.gameOverTimer === 0) {
+      this.gameEndLogged = true;
+      this.winningTeam = winner;
+      gameLogger.gameEnd(this.gid, winner);
+      this.broadcast(JSON.stringify({ command: 'gameEnd', winner }));
+    }
   }
 
   // Emit a sound effect from the given location. `owner` is optional.
@@ -115,6 +163,10 @@ class BoloServerWorld extends ServerWorld {
 
     // Finish with a 'sync' message.
     ws.send(Buffer.from([net.SYNC_MESSAGE]).toString('base64'));
+
+    if (this.gameEndLogged && this.winningTeam) {
+      ws.send(JSON.stringify({ command: 'gameEnd', winner: this.winningTeam }));
+    }
   }
 
   onEnd(ws: WebSocket, _code: number, _reason: string): void {
@@ -220,7 +272,7 @@ class BoloServerWorld extends ServerWorld {
 
     (ws as any).tank = this.spawn(Tank, message.team);
     const teamName = message.team === 0 ? 'red' : 'blue';
-    console.log(`Game ${this.gid}: ${message.nick} has joined the ${teamName} team.`);
+    gameLogger.playerJoined(this.gid, message.nick, teamName);
     let packet: any = this.changesPacket(true);
     packet = Buffer.from(packet).toString('base64');
     this.broadcast(packet);
@@ -253,7 +305,7 @@ class BoloServerWorld extends ServerWorld {
   }
 
   onError(ws: WebSocket, err: Error): void {
-    console.error(err.message);
+    gameLogger.gameError(this.gid, err.message);
   }
 
   //### Helpers
@@ -499,8 +551,7 @@ class Application {
     game.gid = gid;
     game.url = `${this.options.general.base}/match/${gid}`;
     game.lastActivity = Date.now();
-    console.log(`Created game '${gid}'`);
-    console.log(`URL: http://localhost:${this.options.web.port}?${gid}`);
+    gameLogger.gameCreated(gid, `http://localhost:${this.options.web.port}?${gid}`);
     this.startLoop();
     return game;
   }
@@ -509,7 +560,7 @@ class Application {
     delete this.games[game.gid];
     this.possiblyStopLoop();
     game.close();
-    console.log(`Closed game '${game.gid}'`);
+    gameLogger.gameClosed(game.gid);
   }
 
   registerIrcClient(irc: any): void {
@@ -555,7 +606,7 @@ class Application {
     for (const gid in this.games) {
       const game = this.games[gid];
       if ((now - game.lastActivity) > timeout && game.clients.length === 0) {
-        console.log(`Closing expired game '${gid}' (inactive for ${Math.round((now - game.lastActivity) / 1000)}s)`);
+        gameLogger.gameExpired(gid, Math.round((now - game.lastActivity) / 1000));
         this.closeGame(game);
       }
     }

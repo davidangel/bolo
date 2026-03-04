@@ -196,7 +196,6 @@ class BoloClientWorld extends ClientWorld {
   joinDialog: ModalAPI | null = null;
   settingsDialog: ModalAPI | null = null;
   gameOver: boolean = false;
-  gameOverTimer: number | null = null;
   _messageHandler: ((e: MessageEvent) => void) | null = null;
   chatMessages: HTMLElement | null = null;
   chatContainer: HTMLElement | null = null;
@@ -445,27 +444,6 @@ class BoloClientWorld extends ClientWorld {
     super.tick();
 
     if (this.gameOver) return;
-
-    if (this.map.bases.length > 0) {
-      let redBases = 0, blueBases = 0, neutralBases = 0;
-      for (const base of this.map.bases) {
-        if (base.team === 0) redBases++;
-        else if (base.team === 1) blueBases++;
-        else neutralBases++;
-      }
-
-      if (neutralBases === 0 && redBases > 0 && blueBases === 0) {
-        if (!this.gameOverTimer) { this.gameOverTimer = 50; }
-        if (--this.gameOverTimer === 0) { this.showGameOverDialog('red'); }
-      } else if (neutralBases === 0 && blueBases > 0 && redBases === 0) {
-        if (!this.gameOverTimer) { this.gameOverTimer = 50; }
-        if (--this.gameOverTimer === 0) { this.showGameOverDialog('blue'); }
-      } else {
-        this.gameOverTimer = null;
-      }
-    } else {
-      this.gameOverTimer = null;
-    }
 
     if (this.increasingRange !== this.decreasingRange) {
       if (++this.rangeAdjustTimer === 6) {
@@ -726,6 +704,11 @@ class BoloClientWorld extends ClientWorld {
         break;
       case 'teamMsg':
         this.receiveChat(this.objects[data.idx], data.text, { team: true });
+        break;
+      case 'gameEnd':
+        if ((data.winner === 'red' || data.winner === 'blue') && !this.gameOver) {
+          this.showGameOverDialog(data.winner);
+        }
         break;
       default:
         throw new Error(`Bad JSON command '${data.command}' from server.`);
