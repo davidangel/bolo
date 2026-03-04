@@ -1,0 +1,28 @@
+import * as fs from 'fs';
+import * as path from 'path';
+
+function walk(dir: string): void {
+  for (const f of fs.readdirSync(dir)) {
+    const p = path.join(dir, f);
+    if (fs.statSync(p).isDirectory()) { walk(p); }
+    else if (p.endsWith('.ts')) { check(p); }
+  }
+}
+
+function check(file: string): void {
+  const s = fs.readFileSync(file, 'utf8');
+  const classExtRegex = /class\s+([A-Za-z0-9_]+)\s+extends\s+[^{\n]+\{/g;
+  let m: RegExpExecArray | null;
+  while ((m = classExtRegex.exec(s))) {
+    const rest = s.slice(m.index);
+    const consMatch = /constructor\s*\([^)]*\)\s*\{([\s\S]*?)\n\s*\}/.exec(rest);
+    if (consMatch) {
+      const consBody = consMatch[1];
+      if (/this\./.test(consBody) && !/super\s*\(/.test(consBody)) {
+        console.log(file + '\n----\n' + consBody.slice(0, 400) + '\n');
+      }
+    }
+  }
+}
+
+walk('src');

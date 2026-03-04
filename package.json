@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build:css": "npx tailwindcss -i ./css/bolo.css -o ./css/compiled.css --minify",
-    "build:js": "node node_modules/browserify/bin/cmd.js src/client/index.js -s World -o js/bolo-bundle.js",
+    "build:js": "npx esbuild src/client/index.ts --bundle --global-name=World --footer:js='World=World.default' --outfile=js/bolo-bundle.js",
     "build": "npm run build:css && npm run build:js",
     "server": "node ./bin/bolo-server config.json",
     "generate-map-previews": "node ./scripts/generate-map-previews.js"
