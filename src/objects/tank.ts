@@ -16,6 +16,11 @@ import type WorldMap from '../world_map';
 import type { WorldMapCell } from '../world_map';
 import type { WorldPillbox } from './world_pillbox';
 
+// The turn rate multiplier is a bit of a hack to make the game feel more responsive.
+// The original game has a turn rate of 1, but it feels very sluggish. Increasing it
+// to 2 makes the game feel much better without breaking anything.
+const TANK_TURN_RATE_MULTIPLIER = 2;
+
 
 interface TankWorld {
   authority?: boolean;
@@ -251,7 +256,7 @@ export class Tank extends BoloObject {
   }
 
   turn(): void {
-    const maxTurn = this.cell!.getTankTurn(this as any);
+    const maxTurn = this.cell!.getTankTurn(this as any) * TANK_TURN_RATE_MULTIPLIER;
     if (this.turningClockwise === this.turningCounterClockwise) {
       this.turnSpeedup = 0;
       return;
