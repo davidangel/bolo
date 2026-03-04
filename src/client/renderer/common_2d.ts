@@ -26,6 +26,43 @@ export default class Common2dRenderer extends BaseRenderer {
     return recovered;
   }
 
+  private ensureOverlay(width: number, height: number): Uint8ClampedArray {
+    const minLen = width * height * 4;
+    if (this.overlay && this.overlay.length >= minLen) {
+      return this.overlay;
+    }
+
+    const fallback = new Uint8ClampedArray(minLen);
+    const img = this.images.overlay as HTMLImageElement | undefined;
+    const ow = img?.width || width;
+    const oh = img?.height || height;
+    if (ow <= 0 || oh <= 0) {
+      this.overlay = fallback;
+      return this.overlay;
+    }
+
+    const temp = document.createElement('canvas');
+    temp.width = ow;
+    temp.height = oh;
+    const tempCtx = temp.getContext('2d');
+    if (!tempCtx) {
+      this.overlay = fallback;
+      return this.overlay;
+    }
+
+    try {
+      tempCtx.globalCompositeOperation = 'copy';
+      if (img) {
+        tempCtx.drawImage(img, 0, 0);
+      }
+      const data = tempCtx.getImageData(0, 0, ow, oh).data;
+      this.overlay = data;
+    } catch {
+      this.overlay = fallback;
+    }
+    return this.overlay;
+  }
+
   setup(): void {
     try {
       this.ctx = this.canvas.getContext('2d')!;
@@ -36,14 +73,9 @@ export default class Common2dRenderer extends BaseRenderer {
     }
 
     // Extract raw pixel data from the overlay image so we can tint styled tilemaps.
-    const img = this.images.overlay as HTMLImageElement;
-    const temp = document.createElement('canvas');
-    temp.width  = img.width;
-    temp.height = img.height;
-    const tempCtx = temp.getContext('2d')!;
-    tempCtx.globalCompositeOperation = 'copy';
-    tempCtx.drawImage(img, 0, 0);
-    this.overlay = tempCtx.getImageData(0, 0, img.width, img.height).data;
+    this.overlay = new Uint8ClampedArray(0);
+    const styled = this.images.styled as HTMLImageElement;
+    this.ensureOverlay(styled.width || 1, styled.height || 1);
 
     this.prestyled = {};
   }
@@ -78,14 +110,15 @@ export default class Common2dRenderer extends BaseRenderer {
 
     const imageData = ctx.getImageData(0, 0, width, height);
     const { data } = imageData;
+    const overlay = this.ensureOverlay(width, height);
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         const i = 4 * (y * width + x);
-        const factor = this.overlay[i] / 255;
+        const factor = overlay[i] / 255;
         data[i]     = round(factor * color.r + (1 - factor) * data[i]);
         data[i + 1] = round(factor * color.g + (1 - factor) * data[i + 1]);
         data[i + 2] = round(factor * color.b + (1 - factor) * data[i + 2]);
-        data[i + 3] = min(255, data[i + 3] + this.overlay[i]);
+        data[i + 3] = min(255, data[i + 3] + overlay[i]);
       }
     }
     ctx.putImageData(imageData, 0, 0);
