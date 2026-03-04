@@ -695,8 +695,7 @@ class BoloClientWorld extends ClientWorld {
   }
 
   handleJsonCommand(data: any): void {
-    const command = typeof data.command === 'string' ? data.command.trim() : data.command;
-    switch (command) {
+    switch (data.command) {
       case 'nick':
         (this.objects[data.idx] as any).name = data.nick;
         break;
@@ -712,7 +711,7 @@ class BoloClientWorld extends ClientWorld {
         }
         break;
       default:
-        throw new Error(`Bad JSON command '${command}' from server.`);
+        throw new Error(`Bad JSON command '${data.command}' from server.`);
     }
   }
 
