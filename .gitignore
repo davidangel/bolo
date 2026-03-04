@@ -1,6 +1,9 @@
 /node_modules/*
 /js/bolo-bundle.js
 /bolo.manifest
+/coverage/
+coverage/
+*.lcov
 *.gz
 /*.json
 !/package.json
