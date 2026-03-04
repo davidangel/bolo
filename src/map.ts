@@ -593,8 +593,8 @@ export class Map {
     };
 
     const ensureRunSpace = (numNibbles: number) => {
-      if (run == null) return;
-      if (!((((255 - 4) * 2) - run.length) < numNibbles)) return;
+      const localRun = run!;
+      if (!((((255 - 4) * 2) - localRun.length) < numNibbles)) return;
       flushRun();
       run = [];
       sx = ex;

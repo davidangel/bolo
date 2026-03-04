@@ -134,13 +134,12 @@ export class WorldMapCell extends MapCell {
     let sfx = sounds.SHOT_BUILDING;
     if (this.isType('.', '}', ':', '~')) {
       if (--this.life === 0) {
-        let nextType: string;
+        let nextType: string = ' ';
         switch (this.type.ascii) {
           case '.': nextType = '~'; break;
           case '}': nextType = ':'; break;
           case ':': nextType = ' '; break;
           case '~': nextType = ' '; break;
-          default:  nextType = ' '; break;
         }
         this.setType(nextType);
       } else {
