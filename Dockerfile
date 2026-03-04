@@ -6,6 +6,7 @@ RUN apk add --no-cache bash
 
 COPY package*.json ./
 RUN npm install
+RUN npm install --no-save ts-node typescript
 
 COPY . .
 
