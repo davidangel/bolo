@@ -1,6 +1,6 @@
 {
   "name": "bolo",
-  "version": "0.1.91",
+  "version": "0.0.1",
   "description": "Bolo, a game of tank warfare, rewritten for modern browsers.",
   "homepage": "https://github.com/davidangel/bolo",
   "repository": {
@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build:css": "npx tailwindcss -i ./css/bolo.css -o ./css/compiled.css --minify",
-    "build:js": "npx esbuild src/client/index.ts --bundle --global-name=World --footer:js='World=World.default' --outfile=js/bolo-bundle.js",
+    "build:js": "node ./scripts/build-js.js",
     "build": "npm run build:css && npm run build:js",
     "test": "jest",
     "test:watch": "jest --watch",

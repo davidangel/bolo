@@ -1,5 +1,6 @@
 /node_modules/*
-/js/bolo-bundle.js
+/js/bolo-bundle*.js
+/js/bolo-bundle*.js.map
 /bolo.manifest
 /coverage/
 coverage/

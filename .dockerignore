@@ -6,4 +6,5 @@ npm-debug.log
 .DS_Store
 maps/*.olv
 maps/*.bzm
-js/bolo-bundle.js
+js/bolo-bundle*.js
+js/bolo-bundle*.js.map

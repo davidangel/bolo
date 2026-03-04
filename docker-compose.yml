@@ -2,7 +2,10 @@ version: '3.8'
 
 services:
   server:
-    build: .
+    build:
+      context: .
+      args:
+        GIT_COMMIT_SHORT: ${GIT_COMMIT_SHORT:-nogit}
     ports:
       - "${PORT:-8124}:8124"
     environment:

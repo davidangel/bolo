@@ -2,6 +2,9 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+ARG GIT_COMMIT_SHORT=nogit
+ENV GIT_COMMIT_SHORT=$GIT_COMMIT_SHORT
+
 RUN apk add --no-cache bash
 
 COPY package*.json ./
