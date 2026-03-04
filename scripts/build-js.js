@@ -14,9 +14,17 @@ function run(command, args, cwd) {
 }
 
 function getShortCommit() {
-  const provided = (process.env.GIT_COMMIT_SHORT || process.env.BOLO_BUILD_HASH || '').trim();
+  const fromEnv = (
+    process.env.GIT_COMMIT_SHORT ||
+    process.env.BOLO_BUILD_HASH ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.CI_COMMIT_SHA ||
+    process.env.GITHUB_SHA ||
+    ''
+  ).trim();
+  const provided = fromEnv.toLowerCase() === 'nogit' ? '' : fromEnv;
   if (provided) {
-    return provided;
+    return provided.slice(0, 12);
   }
 
   const res = spawnSync('git', ['rev-parse', '--short', 'HEAD'], {
@@ -24,9 +32,10 @@ function getShortCommit() {
     encoding: 'utf8',
   });
   if (res.status !== 0) {
-    return 'nogit';
+    return `b${Date.now().toString(36)}`;
   }
-  return (res.stdout || '').trim() || 'nogit';
+  const hash = (res.stdout || '').trim();
+  return hash || `b${Date.now().toString(36)}`;
 }
 
 function removeOldBundles() {

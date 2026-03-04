@@ -5,7 +5,7 @@ services:
     build:
       context: .
       args:
-        GIT_COMMIT_SHORT: ${GIT_COMMIT_SHORT:-nogit}
+        GIT_COMMIT_SHORT: ${GIT_COMMIT_SHORT:-}
     ports:
       - "${PORT:-8124}:8124"
     environment:

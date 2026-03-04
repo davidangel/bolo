@@ -2,7 +2,7 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-ARG GIT_COMMIT_SHORT=nogit
+ARG GIT_COMMIT_SHORT=
 ENV GIT_COMMIT_SHORT=$GIT_COMMIT_SHORT
 
 RUN apk add --no-cache bash
