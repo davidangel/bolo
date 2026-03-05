@@ -103,10 +103,11 @@ describe('server application game settings', () => {
     try {
       app.listen(0);
       const port = (app.httpServer.address() as any).port as number;
-      const created = await requestJson(port, '/create?hideEnemyMinesFromEnemyTanks=0');
+      const created = await requestJson(port, '/create?hideEnemyMinesFromEnemyTanks=0&tournamentMode=1');
       const game = app.games[created.gid];
 
       expect(game.gameSettings.hideEnemyMinesFromEnemyTanks).toBe(false);
+      expect(game.gameSettings.tournamentMode).toBe(true);
 
       const sent: string[] = [];
       const ws: any = {
@@ -128,7 +129,10 @@ describe('server application game settings', () => {
 
       expect(settingsMessage).toEqual({
         command: 'settings',
-        game: { hideEnemyMinesFromEnemyTanks: false },
+        game: {
+          hideEnemyMinesFromEnemyTanks: false,
+          tournamentMode: true,
+        },
       });
     } finally {
       app.shutdown();

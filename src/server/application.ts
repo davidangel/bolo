@@ -24,10 +24,12 @@ import { TICK_LENGTH_MS } from '../constants';
 
 interface GameSettings {
   hideEnemyMinesFromEnemyTanks: boolean;
+  tournamentMode: boolean;
 }
 
 const defaultGameSettings = (): GameSettings => ({
   hideEnemyMinesFromEnemyTanks: true,
+  tournamentMode: false,
 });
 
 const parseBooleanParam = (value: string | null, fallback: boolean): boolean => {
@@ -477,6 +479,10 @@ class Application {
         hideEnemyMinesFromEnemyTanks: parseBooleanParam(
           urlObj.searchParams.get('hideEnemyMinesFromEnemyTanks'),
           true
+        ),
+        tournamentMode: parseBooleanParam(
+          urlObj.searchParams.get('tournamentMode'),
+          false
         ),
       };
 

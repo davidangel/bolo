@@ -200,6 +200,10 @@ const LAUNCH_TEMPLATE = `
           <input id="create-hide-enemy-mines" type="checkbox" checked>
           <span>Mines are hidden from enemy tanks</span>
         </label>
+        <label class="flex items-center gap-2 text-gray-300 cursor-pointer mt-2">
+          <input id="create-tournament-mode" type="checkbox">
+          <span>Tournament Mode (full ammo only on first spawn)</span>
+        </label>
       </div>
     </details>
     <button id="create-game-submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition-colors">Create Game</button>
@@ -245,6 +249,7 @@ class BoloClientWorld extends ClientWorld {
   chatContainer: HTMLElement | null = null;
   chatInput: HTMLInputElement & { team?: boolean } | null = null;
   hideEnemyMinesFromEnemyTanks: boolean = true;
+  tournamentMode: boolean = false;
 
   declare map: any;
   declare soundkit: any;
@@ -380,12 +385,15 @@ class BoloClientWorld extends ClientWorld {
     const mapSelect = this.launchDialog!.find('#map-select');
     const mapName = mapSelect ? mapSelect.value : '';
     const hideEnemyMinesEl = this.launchDialog!.find('#create-hide-enemy-mines')._el as HTMLInputElement | null;
+    const tournamentModeEl = this.launchDialog!.find('#create-tournament-mode')._el as HTMLInputElement | null;
     const hideEnemyMinesFromEnemyTanks = hideEnemyMinesEl ? hideEnemyMinesEl.checked : true;
+    const tournamentMode = tournamentModeEl ? tournamentModeEl.checked : false;
     const params = new URLSearchParams();
     if (mapName) {
       params.set('map', mapName);
     }
     params.set('hideEnemyMinesFromEnemyTanks', hideEnemyMinesFromEnemyTanks ? '1' : '0');
+    params.set('tournamentMode', tournamentMode ? '1' : '0');
     const url = `/create?${params.toString()}`;
     fetch(url).then(res => res.json()).then((data: any) => {
       if (data && data.gid) {
@@ -768,9 +776,14 @@ class BoloClientWorld extends ClientWorld {
         this.receiveChat(this.objects[data.idx], data.text, { team: true });
         break;
       case 'settings':
-        if (data.game && typeof data.game.hideEnemyMinesFromEnemyTanks === 'boolean') {
-          this.hideEnemyMinesFromEnemyTanks = data.game.hideEnemyMinesFromEnemyTanks;
-          this.map?.retile?.();
+        if (data.game) {
+          if (typeof data.game.hideEnemyMinesFromEnemyTanks === 'boolean') {
+            this.hideEnemyMinesFromEnemyTanks = data.game.hideEnemyMinesFromEnemyTanks;
+            this.map?.retile?.();
+          }
+          if (typeof data.game.tournamentMode === 'boolean') {
+            this.tournamentMode = data.game.tournamentMode;
+          }
         }
         break;
       case 'gameEnd':

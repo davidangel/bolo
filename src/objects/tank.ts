@@ -31,6 +31,9 @@ interface TankWorld {
   removeTank(tank: Tank): void;
   map: WorldMap;
   tanks: Tank[];
+  gameSettings?: {
+    tournamentMode?: boolean;
+  };
 }
 
 
@@ -64,6 +67,7 @@ export class Tank extends BoloObject {
   tank_idx: number = 0;
 
   private _finalizeListenerAdded: boolean = false;
+  private _hasSpawnedOnce: boolean = false;
 
   constructor(world: unknown) {
     super(world);
@@ -111,8 +115,14 @@ export class Tank extends BoloObject {
     this.turnSpeedup             = 0;
 
     // FIXME: gametype dependant.
-    this.shells = 40;
-    this.mines  = 0;
+    const tournamentRespawn = !!w.gameSettings?.tournamentMode && this._hasSpawnedOnce;
+    if (tournamentRespawn) {
+      this.shells = 0;
+      this.mines  = 0;
+    } else {
+      this.shells = 40;
+      this.mines  = 0;
+    }
     this.armour = 40;
     this.trees  = 0;
 
@@ -121,6 +131,7 @@ export class Tank extends BoloObject {
     this.firingRange = 7;
     this.waterTimer  = 0;
     this.onBoat      = true;
+    this._hasSpawnedOnce = true;
   }
 
   serialization(_isCreate: boolean, p: SerializationCallback): void {

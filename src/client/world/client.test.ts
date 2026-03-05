@@ -18,6 +18,7 @@ describe('client world settings command', () => {
   test('ignores malformed settings payload', () => {
     const world = Object.create(BoloClientWorld.prototype) as any;
     world.hideEnemyMinesFromEnemyTanks = true;
+    world.tournamentMode = false;
     world.map = { retile: jest.fn() };
 
     world.handleJsonCommand({
@@ -26,6 +27,22 @@ describe('client world settings command', () => {
     });
 
     expect(world.hideEnemyMinesFromEnemyTanks).toBe(true);
+    expect(world.tournamentMode).toBe(false);
+    expect(world.map.retile).not.toHaveBeenCalled();
+  });
+
+  test('applies tournamentMode from settings payload', () => {
+    const world = Object.create(BoloClientWorld.prototype) as any;
+    world.hideEnemyMinesFromEnemyTanks = true;
+    world.tournamentMode = false;
+    world.map = { retile: jest.fn() };
+
+    world.handleJsonCommand({
+      command: 'settings',
+      game: { tournamentMode: true }
+    });
+
+    expect(world.tournamentMode).toBe(true);
     expect(world.map.retile).not.toHaveBeenCalled();
   });
 });
