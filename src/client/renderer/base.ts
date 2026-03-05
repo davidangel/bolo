@@ -63,6 +63,7 @@ export default class BaseRenderer {
 
   // Check if a mine should be visible to the player. Enemy mines are hidden.
   isMineVisibleToPlayer(cell: any): boolean {
+    if (this.world?.hideEnemyMinesFromEnemyTanks === false) { return true; }
     if (!cell.mine) { return true; }
     if (cell.mineOwner === 255) { return true; }
     const player = this.world.player;

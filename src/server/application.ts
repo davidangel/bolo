@@ -22,6 +22,28 @@ import { SELECTABLE_TEAM_COLORS } from '../team_colors';
 import * as net from '../net';
 import { TICK_LENGTH_MS } from '../constants';
 
+interface GameSettings {
+  hideEnemyMinesFromEnemyTanks: boolean;
+}
+
+const defaultGameSettings = (): GameSettings => ({
+  hideEnemyMinesFromEnemyTanks: true,
+});
+
+const parseBooleanParam = (value: string | null, fallback: boolean): boolean => {
+  if (value == null) {
+    return fallback;
+  }
+  const normalized = value.toLowerCase();
+  if (normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'no') {
+    return false;
+  }
+  if (normalized === '1' || normalized === 'true' || normalized === 'on' || normalized === 'yes') {
+    return true;
+  }
+  return fallback;
+};
+
 
 //# Server world
 
@@ -32,6 +54,7 @@ class BoloServerWorld extends ServerWorld {
   gameOverTimer: number | null = null;
   gameEndLogged: boolean = false;
   winningTeam: string | null = null;
+  gameSettings: GameSettings;
   gid: string = '';
   url: string = '';
   lastActivity: number = 0;
@@ -41,9 +64,10 @@ class BoloServerWorld extends ServerWorld {
   declare spawnMapObjects: () => void;
   declare tanks: any[];
 
-  constructor(map: any) {
+  constructor(map: any, gameSettings?: Partial<GameSettings>) {
     super();
     this.map = map;
+    this.gameSettings = { ...defaultGameSettings(), ...(gameSettings || {}) };
     this.boloInit();
     this.clients = [];
     this.map.world = this;
@@ -155,6 +179,8 @@ class BoloServerWorld extends ServerWorld {
     // Synchronize all player names.
     const messages = this.tanks.map((tank: any) => ({ command: 'nick', idx: tank.idx, nick: tank.name }));
     ws.send(JSON.stringify(messages));
+
+    ws.send(JSON.stringify({ command: 'settings', game: this.gameSettings }));
 
     // Finish with a 'sync' message.
     ws.send(Buffer.from([net.SYNC_MESSAGE]).toString('base64'));
@@ -447,6 +473,12 @@ class Application {
 
       const urlObj = new URL(req.url, 'http://localhost');
       const mapName = urlObj.searchParams.get('map');
+      const gameSettings: GameSettings = {
+        hideEnemyMinesFromEnemyTanks: parseBooleanParam(
+          urlObj.searchParams.get('hideEnemyMinesFromEnemyTanks'),
+          true
+        ),
+      };
 
       const names = Object.getOwnPropertyNames(this.maps.nameIndex);
       let mapDescr = mapName ? this.maps.get(mapName) : undefined;
@@ -459,7 +491,7 @@ class Application {
         try {
           const packet = this.demo.map.dump({ noPills: true, noBases: true });
           const mapData = Buffer.from(packet);
-          const game = this.createGame(mapData);
+          const game = this.createGame(mapData, gameSettings);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ gid: game.gid, url: game.url }));
           return;
@@ -472,7 +504,7 @@ class Application {
       if (!mapDescr) { res.writeHead(500); res.end('no maps'); return; }
       fs.readFile(mapDescr.path, (err, data) => {
         if (err) { res.writeHead(500); res.end('error'); return; }
-        const game = this.createGame(data);
+        const game = this.createGame(data, gameSettings);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ gid: game.gid, url: game.url }));
       });
@@ -538,10 +570,10 @@ class Application {
     return gid;
   }
 
-  createGame(mapData: Buffer): BoloServerWorld {
+  createGame(mapData: Buffer, gameSettings?: Partial<GameSettings>): BoloServerWorld {
     const map = WorldMap.load(mapData);
     const gid = this.createGameId();
-    const game = new BoloServerWorld(map);
+    const game = new BoloServerWorld(map, gameSettings);
     this.games[gid] = game;
     game.gid = gid;
     game.url = `${this.options.general.base}/match/${gid}`;
