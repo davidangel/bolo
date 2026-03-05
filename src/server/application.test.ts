@@ -89,7 +89,7 @@ describe('server application game end', () => {
 });
 
 describe('server application game settings', () => {
-  test('propagates hidden-mine setting from create endpoint to connect payload', async () => {
+  test('propagates game settings from create endpoint to connect payload', async () => {
     const app = createBoloApp({
       general: { base: '', maxgames: 10 },
       web: { port: 0, log: false },
@@ -103,11 +103,12 @@ describe('server application game settings', () => {
     try {
       app.listen(0);
       const port = (app.httpServer.address() as any).port as number;
-      const created = await requestJson(port, '/create?hideEnemyMinesFromEnemyTanks=0&tournamentMode=1');
+      const created = await requestJson(port, '/create?hideEnemyMinesFromEnemyTanks=0&tournamentMode=1&public=1');
       const game = app.games[created.gid];
 
       expect(game.gameSettings.hideEnemyMinesFromEnemyTanks).toBe(false);
       expect(game.gameSettings.tournamentMode).toBe(true);
+      expect(game.gameSettings.public).toBe(true);
 
       const sent: string[] = [];
       const ws: any = {
@@ -132,6 +133,7 @@ describe('server application game settings', () => {
         game: {
           hideEnemyMinesFromEnemyTanks: false,
           tournamentMode: true,
+          public: true,
         },
       });
     } finally {
@@ -173,6 +175,35 @@ describe('server application game settings', () => {
     } finally {
       spawnSpy.mockRestore();
       game.close();
+    }
+  });
+
+  test('lists only active public games in public games endpoint', async () => {
+    const app = createBoloApp({
+      general: { base: '', maxgames: 10 },
+      web: { port: 0, log: false },
+    }) as any;
+
+    const map = new Map();
+    const publicGame = app.createGame(Buffer.from(map.dump()), { public: true }) as any;
+    app.createGame(Buffer.from(map.dump()), { public: false });
+    publicGame.tanks = [{ name: 'Alice' }, { name: 'Bob' }];
+
+    const ws: any = { send: jest.fn(), on: jest.fn(), close: jest.fn() };
+    publicGame.onConnect(ws);
+
+    try {
+      app.listen(0);
+      const port = (app.httpServer.address() as any).port as number;
+      const listed = await requestJson(port, '/api/public-games');
+      expect(Array.isArray(listed)).toBe(true);
+      expect(listed.length).toBe(1);
+      expect(listed[0].gid).toBe(publicGame.gid);
+      expect(typeof listed[0].mapName).toBe('string');
+      expect(Array.isArray(listed[0].playerNames)).toBe(true);
+      expect(listed[0].playerNames).toEqual(['Alice', 'Bob']);
+    } finally {
+      app.shutdown();
     }
   });
 });

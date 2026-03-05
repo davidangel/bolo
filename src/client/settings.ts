@@ -12,6 +12,7 @@ const DEFAULT_KEY_MAPPINGS: Record<string, string> = {
 
 const DEFAULT_AUTO_SLOWDOWN = true;
 const DEFAULT_AUTO_GUNSIGHT = false;
+const DEFAULT_LAUNCH_OTHER_SETTINGS_OPEN = true;
 
 const KEY_DISPLAY_NAMES: Record<string, string> = {
   up: 'Move Up',
@@ -83,6 +84,7 @@ class SettingsManager {
   team: string;
   autoSlowdown: boolean;
   autoGunsight: boolean;
+  launchOtherSettingsOpen: boolean;
 
   constructor() {
     this.keyMappings = { ...DEFAULT_KEY_MAPPINGS };
@@ -91,6 +93,7 @@ class SettingsManager {
     this.team = 'red';
     this.autoSlowdown = DEFAULT_AUTO_SLOWDOWN;
     this.autoGunsight = DEFAULT_AUTO_GUNSIGHT;
+    this.launchOtherSettingsOpen = DEFAULT_LAUNCH_OTHER_SETTINGS_OPEN;
     this.load();
   }
 
@@ -105,6 +108,9 @@ class SettingsManager {
         this.team = data.team || 'red';
         this.autoSlowdown = typeof data.autoSlowdown === 'boolean' ? data.autoSlowdown : DEFAULT_AUTO_SLOWDOWN;
         this.autoGunsight = typeof data.autoGunsight === 'boolean' ? data.autoGunsight : DEFAULT_AUTO_GUNSIGHT;
+        this.launchOtherSettingsOpen = typeof data.launchOtherSettingsOpen === 'boolean'
+          ? data.launchOtherSettingsOpen
+          : DEFAULT_LAUNCH_OTHER_SETTINGS_OPEN;
       }
     } catch (e) {
       console.warn('Failed to load settings:', e);
@@ -119,7 +125,8 @@ class SettingsManager {
         nickname: this.nickname,
         team: this.team,
         autoSlowdown: this.autoSlowdown,
-        autoGunsight: this.autoGunsight
+        autoGunsight: this.autoGunsight,
+        launchOtherSettingsOpen: this.launchOtherSettingsOpen
       }));
     } catch (e) {
       console.warn('Failed to save settings:', e);
@@ -193,10 +200,19 @@ class SettingsManager {
     return this.autoGunsight;
   }
 
+  setLaunchOtherSettingsOpen(value: boolean): void {
+    this.launchOtherSettingsOpen = value;
+  }
+
+  getLaunchOtherSettingsOpen(): boolean {
+    return this.launchOtherSettingsOpen;
+  }
+
   reset(): void {
     this.keyMappings = { ...DEFAULT_KEY_MAPPINGS };
     this.autoSlowdown = DEFAULT_AUTO_SLOWDOWN;
     this.autoGunsight = DEFAULT_AUTO_GUNSIGHT;
+    this.launchOtherSettingsOpen = DEFAULT_LAUNCH_OTHER_SETTINGS_OPEN;
     this.save();
   }
 }

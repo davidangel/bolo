@@ -44,7 +44,7 @@ interface ModalOptions {
 function createModal(content: string, options: ModalOptions = {}): ModalAPI {
   const overlay = $.create('div', { class: 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center' });
   const dialog = document.createElement('div');
-  dialog.className = 'bg-gray-800 rounded-lg shadow-2xl p-6 min-w-[320px] max-w-md border border-gray-700';
+  dialog.className = 'bg-gray-800 rounded-lg shadow-2xl p-6 min-w-[320px] border border-gray-700';
   if (options.dialogClass) {
     dialog.className += ` ${options.dialogClass}`;
   }
@@ -185,6 +185,66 @@ function teamSafeName(teamName: string): string {
   return teamName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
 }
 
+const LAUNCH_TEMPLATE = `
+<div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4/5">
+    <div>
+      <p class="text-gray-300 mb-4">Create a new game:</p>
+      <div id="map-selector" class="mb-6">
+        <label class="block text-gray-400 text-sm mb-2">Select Map:</label>
+        <div class="flex gap-3 items-start mb-4">
+          <div class="flex-1">
+            <select id="map-select" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500 mb-3">
+              <option value="">Loading maps...</option>
+            </select>
+            <details id="create-other-settings" class="group border border-gray-700 rounded" open>
+              <summary class="px-3 py-2 cursor-pointer text-gray-300 select-none">Other game settings</summary>
+              <div class="px-3 pb-3 pt-1 overflow-hidden max-h-0 opacity-0 transition-all duration-500 group-open:max-h-96 group-open:opacity-100">
+                <label class="flex items-center gap-2 text-gray-300 text-sm cursor-pointer">
+                  <input id="create-hide-enemy-mines" type="checkbox" checked>
+                  <span>Mines are hidden from enemy tanks</span>
+                </label>
+                <label class="flex items-center gap-2 text-gray-300 text-sm cursor-pointer mt-2">
+                  <input id="create-tournament-mode" type="checkbox">
+                  <span>Tournament Mode (full ammo only on first spawn)</span>
+                </label>
+                <label class="flex items-center gap-2 text-gray-300 text-sm cursor-pointer mt-2">
+                  <input id="create-public-game" type="checkbox">
+                  <span>Public - show in active game list</span>
+                </label>
+              </div>
+            </details>
+          </div>
+          <div id="map-preview" class="map-preview w-32 h-32 rounded border border-gray-600 bg-gray-900 flex items-center justify-center overflow-hidden"></div>
+        </div>
+        <button id="create-game-submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition-colors">Create Game</button>
+      </div>
+
+      <div class="relative my-6">
+        <div class="absolute inset-0 flex items-center">
+          <div class="w-full border-t border-gray-700"></div>
+        </div>
+        <div class="relative flex justify-center text-sm">
+          <span class="px-3 bg-gray-800 text-gray-500">or</span>
+        </div>
+      </div>
+
+      <p class="text-gray-300 mb-3 font-medium">Join with game code:</p>
+      <input type="text" id="join-code-field" name="join-code-field" 
+             class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white mb-4 focus:outline-none focus:border-blue-500" 
+             placeholder="e.g. happy-pizza-tiger"></input>
+      <button id="join-code-submit" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors mb-4">Join Game</button>
+    </div>
+
+    <div>
+      <p class="text-gray-300 mb-4">Join public game:</p>
+      <div id="public-games-list" class="border border-gray-700 rounded p-3 min-h-[180px] max-h-[360px] overflow-y-auto">
+        <p class="text-gray-500 text-sm">Loading active public games...</p>
+      </div>
+    </div>
+  </div>
+</div>`;
+
 function keyToDisplayLabel(key: string): string {
   const normalized = key.trim();
   const mapping: Record<string, string> = {
@@ -266,55 +326,6 @@ function eventKeyCode(e: KeyboardEvent): number {
   }
   return 0;
 }
-
-
-const LAUNCH_TEMPLATE = `
-<div>
-  <p class="text-gray-300 mb-4">Create a new game:</p>
-  <div id="map-selector" class="mb-6">
-    <label class="block text-gray-400 text-sm mb-2">Select Map:</label>
-    <div class="flex gap-3 items-start mb-4">
-      <div class="flex-1">
-        <select id="map-select" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500 mb-3">
-          <option value="">Loading maps...</option>
-        </select>
-        <details class="group border border-gray-700 rounded">
-          <summary class="px-3 py-2 cursor-pointer text-gray-300 select-none">Other game settings</summary>
-          <div class="px-3 pb-3 pt-1 overflow-hidden max-h-0 opacity-0 transition-all duration-500 group-open:max-h-40 group-open:opacity-100">
-            <label class="flex items-center gap-2 text-gray-300 text-sm cursor-pointer">
-              <input id="create-hide-enemy-mines" type="checkbox" checked>
-              <span>Mines are hidden from enemy tanks</span>
-            </label>
-            <label class="flex items-center gap-2 text-gray-300 text-sm cursor-pointer mt-2">
-              <input id="create-tournament-mode" type="checkbox">
-              <span>Tournament Mode (full ammo only on first spawn)</span>
-            </label>
-          </div>
-        </details>
-      </div>
-      <div id="map-preview" class="map-preview w-32 h-32 rounded border border-gray-600 bg-gray-900 flex items-center justify-center overflow-hidden"></div>
-    </div>
-    <button id="create-game-submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition-colors">Create Game</button>
-  </div>
-
-  <div class="relative my-6">
-    <div class="absolute inset-0 flex items-center">
-      <div class="w-full border-t border-gray-700"></div>
-    </div>
-    <div class="relative flex justify-center text-sm">
-      <span class="px-3 bg-gray-800 text-gray-500">or</span>
-    </div>
-  </div>
-
-  <p class="text-gray-300 mb-3 font-medium">Join with game code:</p>
-  <input type="text" id="join-code-field" name="join-code-field" 
-         class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white mb-4 focus:outline-none focus:border-blue-500" 
-         placeholder="e.g. happy-pizza-tiger"></input>
-  <button id="join-code-submit" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors mb-4">Join Game</button>
-  
-</div>`;
-
-
 //# Networked game
 
 // The `BoloClientWorld` class implements a networked game using a WebSocket.
@@ -388,6 +399,15 @@ class BoloClientWorld extends ClientWorld {
     // Otherwise present a launch dialog allowing create/join by code.
     this.vignette.message('Choose Create or Join');
     this.launchDialog = createModal(LAUNCH_TEMPLATE, { persistent: true });
+    const launchOtherSettingsEl = this.launchDialog.find('#create-other-settings')._el as HTMLDetailsElement | null;
+    if (launchOtherSettingsEl) {
+      launchOtherSettingsEl.open = this.settingsManager ? this.settingsManager.getLaunchOtherSettingsOpen() : true;
+      launchOtherSettingsEl.addEventListener('toggle', () => {
+        if (!this.settingsManager) { return; }
+        this.settingsManager.setLaunchOtherSettingsOpen(launchOtherSettingsEl.open);
+        this.settingsManager.save();
+      });
+    }
     this.launchDialog.find('#join-code-field').focus();
     this.launchDialog.find('#join-code-field').keydown((e: KeyboardEvent) => { if (e.which === 13) { this.launchJoin(); } });
     this.launchDialog.find('#join-code-submit').click(() => this.launchJoin());
@@ -395,6 +415,47 @@ class BoloClientWorld extends ClientWorld {
 
     // Load maps list
     this.loadMapsList();
+    this.loadPublicGamesList();
+  }
+
+  async loadPublicGamesList(): Promise<void> {
+    try {
+      const res = await fetch('/api/public-games');
+      const games: Array<{ gid: string; url: string; players: number; mapName?: string; playerNames?: string[] }> = await res.json();
+      const container = this.launchDialog!.find('#public-games-list')._el as HTMLElement | null;
+      if (!container) return;
+
+      if (!games.length) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">No active public games right now.</p>';
+        return;
+      }
+
+      container.innerHTML = '';
+      for (const game of games) {
+        const row = document.createElement('div');
+        row.className = 'group w-full p-2 mb-2 last:mb-0 rounded border border-gray-700 bg-gray-800 hover:bg-gray-700 transition-colors cursor-pointer';
+        const mapName = (game.mapName || 'Unknown Map').trim() || 'Unknown Map';
+        const titlePlayers = Array.isArray(game.playerNames) ? game.playerNames.filter((name) => !!name && name.trim().length > 0) : [];
+        row.title = titlePlayers.length > 0 ? titlePlayers.join(', ') : 'No players yet';
+        row.innerHTML = `<div class="flex items-center justify-between gap-3"><div class="min-w-0"><div class="text-gray-200 font-medium truncate">${mapName} (${game.players})</div><div class="text-gray-400 text-xs truncate">${game.gid}</div></div><button type="button" class="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-700 text-white">Join</button></div>`;
+        const joinButton = row.querySelector('button');
+        if (joinButton) {
+          joinButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            location.search = `?${game.gid}`;
+          });
+        }
+        row.addEventListener('click', () => {
+          location.search = `?${game.gid}`;
+        });
+        container.appendChild(row);
+      }
+    } catch (e) {
+      const container = this.launchDialog!.find('#public-games-list')._el as HTMLElement | null;
+      if (container) {
+        container.innerHTML = '<p class="text-gray-500 text-sm">Unable to load public games.</p>';
+      }
+    }
   }
 
   async loadMapsList(): Promise<void> {
@@ -474,14 +535,17 @@ class BoloClientWorld extends ClientWorld {
     const mapName = mapSelect ? mapSelect.value : '';
     const hideEnemyMinesEl = this.launchDialog!.find('#create-hide-enemy-mines')._el as HTMLInputElement | null;
     const tournamentModeEl = this.launchDialog!.find('#create-tournament-mode')._el as HTMLInputElement | null;
+    const publicGameEl = this.launchDialog!.find('#create-public-game')._el as HTMLInputElement | null;
     const hideEnemyMinesFromEnemyTanks = hideEnemyMinesEl ? hideEnemyMinesEl.checked : true;
     const tournamentMode = tournamentModeEl ? tournamentModeEl.checked : false;
+    const isPublicGame = publicGameEl ? publicGameEl.checked : false;
     const params = new URLSearchParams();
     if (mapName) {
       params.set('map', mapName);
     }
     params.set('hideEnemyMinesFromEnemyTanks', hideEnemyMinesFromEnemyTanks ? '1' : '0');
     params.set('tournamentMode', tournamentMode ? '1' : '0');
+    params.set('public', isPublicGame ? '1' : '0');
     const url = `/create?${params.toString()}`;
     fetch(url).then(res => res.json()).then((data: any) => {
       if (data && data.gid) {

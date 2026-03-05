@@ -25,11 +25,13 @@ import { TICK_LENGTH_MS } from '../constants';
 interface GameSettings {
   hideEnemyMinesFromEnemyTanks: boolean;
   tournamentMode: boolean;
+  public: boolean;
 }
 
 const defaultGameSettings = (): GameSettings => ({
   hideEnemyMinesFromEnemyTanks: true,
   tournamentMode: false,
+  public: false,
 });
 
 const parseBooleanParam = (value: string | null, fallback: boolean): boolean => {
@@ -59,6 +61,7 @@ class BoloServerWorld extends ServerWorld {
   gameSettings: GameSettings;
   gid: string = '';
   url: string = '';
+  mapName: string = 'Unknown Map';
   lastActivity: number = 0;
 
   declare map: any;
@@ -478,6 +481,28 @@ class Application {
       res.end(JSON.stringify(maps));
     });
 
+    // Endpoint to get list of active public games.
+    this.connectServer.use('/api/public-games', (req: any, res: any, next: any) => {
+      if (req.method !== 'GET') { return next(); }
+      const publicGames = Object.values(this.games)
+        .filter((game) => game.gameSettings.public)
+        .filter((game) => game.clients.length > 0 || game.tanks.length > 0)
+        .map((game) => {
+          const playerNames = game.tanks
+            .map((tank) => (typeof tank?.name === 'string' ? tank.name.trim() : ''))
+            .filter((name) => name.length > 0);
+          return {
+            gid: game.gid,
+            url: game.url,
+            mapName: game.mapName,
+            players: game.tanks.length,
+            playerNames,
+          };
+        });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(publicGames));
+    });
+
     // Endpoint to create a new game and return its id.
     this.connectServer.use('/create', (req: any, res: any, next: any) => {
       if (req.method !== 'GET') { return next(); }
@@ -493,6 +518,10 @@ class Application {
           urlObj.searchParams.get('tournamentMode'),
           false
         ),
+        public: parseBooleanParam(
+          urlObj.searchParams.get('public'),
+          false
+        ),
       };
 
       const names = Object.getOwnPropertyNames(this.maps.nameIndex);
@@ -506,7 +535,7 @@ class Application {
         try {
           const packet = this.demo.map.dump({ noPills: true, noBases: true });
           const mapData = Buffer.from(packet);
-          const game = this.createGame(mapData, gameSettings);
+          const game = this.createGame(mapData, gameSettings, this.demo?.mapName || 'Everard Island');
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ gid: game.gid, url: game.url }));
           return;
@@ -519,7 +548,7 @@ class Application {
       if (!mapDescr) { res.writeHead(500); res.end('no maps'); return; }
       fs.readFile(mapDescr.path, (err, data) => {
         if (err) { res.writeHead(500); res.end('error'); return; }
-        const game = this.createGame(data, gameSettings);
+        const game = this.createGame(data, gameSettings, mapDescr!.name);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ gid: game.gid, url: game.url }));
       });
@@ -552,7 +581,7 @@ class Application {
     }
     fs.readFile(everard.path, (err, data) => {
       if (err) { cb?.(`Unable to start demo game: ${err.toString()}`); return; }
-      this.demo = this.createGame(data);
+      this.demo = this.createGame(data, undefined, everard.name);
       cb?.();
     });
   }
@@ -585,13 +614,14 @@ class Application {
     return gid;
   }
 
-  createGame(mapData: Buffer, gameSettings?: Partial<GameSettings>): BoloServerWorld {
+  createGame(mapData: Buffer, gameSettings?: Partial<GameSettings>, mapName?: string): BoloServerWorld {
     const map = WorldMap.load(mapData);
     const gid = this.createGameId();
     const game = new BoloServerWorld(map, gameSettings);
     this.games[gid] = game;
     game.gid = gid;
     game.url = `${this.options.general.base}/match/${gid}`;
+    game.mapName = mapName || game.mapName;
     game.lastActivity = Date.now();
     gameLogger.gameCreated(gid, `http://localhost:${this.options.web.port}?${gid}`);
     this.startLoop();
