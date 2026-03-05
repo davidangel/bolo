@@ -486,7 +486,6 @@ class Application {
       if (req.method !== 'GET') { return next(); }
       const publicGames = Object.values(this.games)
         .filter((game) => game.gameSettings.public)
-        .filter((game) => game.clients.length > 0 || game.tanks.length > 0)
         .map((game) => {
           const playerNames = game.tanks
             .map((tank) => (typeof tank?.name === 'string' ? tank.name.trim() : ''))
