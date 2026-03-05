@@ -350,18 +350,22 @@ export default class BaseRenderer {
     this.currentTool = null;
     const tools = $.create('div', { id: 'tool-select' });
     this.hud!.appendChild(tools);
-    for (const toolType of ['forest', 'road', 'building', 'pillbox', 'mine']) {
-      this.initHudTool(tools, toolType);
+    const toolTypes = ['forest', 'road', 'building', 'pillbox', 'mine'];
+    for (let i = 0; i < toolTypes.length; i++) {
+      this.initHudTool(tools, toolTypes[i], String(i + 1));
     }
   }
 
-  initHudTool(tools: Element, toolType: string): void {
+  initHudTool(tools: Element, toolType: string, shortcutLabel: string): void {
     const toolname = `tool-${toolType}`;
     const tool = $.create('input', { type: 'radio', name: 'tool', id: toolname }) as HTMLInputElement;
     tools.appendChild(tool);
     const label = $.create('label', { for: toolname });
     tools.appendChild(label);
     label.appendChild($.create('span', { class: `bolo-tool bolo-${toolname}` }));
+    const shortcut = $.create('span', { class: 'bolo-tool-shortcut' });
+    shortcut.textContent = shortcutLabel;
+    label.appendChild(shortcut);
     tool.addEventListener('click', () => {
       if (this.currentTool === toolType) {
         this.currentTool = null;

@@ -122,6 +122,31 @@ body {
   font-size: 0.875rem;
 }
 
+.settings-key-group {
+  margin-bottom: 1.2rem;
+}
+
+.settings-key-group-title {
+  color: #f3f4f6;
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.settings-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.settings-key-label {
+  color: #e5e7eb;
+  font-size: 0.95rem;
+  flex: 1;
+}
+
 .settings-default {
   color: #9ca3af;
   font-size: 0.75rem;
@@ -140,6 +165,13 @@ body {
   -webkit-user-select: none;
   user-select: none;
   ime-mode: disabled;
+}
+
+.settings-key-input {
+  width: 170px;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 .settings-override:focus {
@@ -232,6 +264,7 @@ input[type="radio"]:checked + .team-radio {
 }
 
 #tool-select label {
+  position: relative;
   display: inline-block;
   padding: 2px;
   cursor: pointer;
@@ -363,6 +396,17 @@ canvas {
   display: inline-block;
   width: 46px; height: 42px;
   background: url(../images/hud.png);
+}
+
+.bolo-tool-shortcut {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  color: #ffffff;
+  font: bold 10px sans-serif;
+  line-height: 1;
+  text-shadow: 0 0 2px #000;
+  pointer-events: none;
 }
 
 .bolo-tool-forest   { background-position:    0px -16px; }

@@ -9,7 +9,7 @@ import * as net from '../../net';
 import * as helpers from '../../helpers';
 import $ from '../../dom';
 import { SELECTABLE_TEAM_COLORS } from '../../team_colors';
-import { SettingsManager, DEFAULT_KEY_MAPPINGS, KEY_DISPLAY_NAMES } from '../settings';
+import { SettingsManager, DEFAULT_KEY_MAPPINGS, KEY_DISPLAY_NAMES, getKeyCode } from '../settings';
 import BoloClientWorldMixin from './mixin';
 
 interface ModalElementWrapper {
@@ -183,6 +183,88 @@ function buildJoinTeamOptions(): string {
 
 function teamSafeName(teamName: string): string {
   return teamName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+}
+
+function keyToDisplayLabel(key: string): string {
+  const normalized = key.trim();
+  const mapping: Record<string, string> = {
+    ArrowUp: '↑',
+    ArrowDown: '↓',
+    ArrowLeft: '←',
+    ArrowRight: '→',
+    Space: 'Spc',
+    Enter: 'Ret',
+    Escape: 'Esc',
+  };
+  if (mapping[normalized]) {
+    return mapping[normalized];
+  }
+  if (normalized.length === 1) {
+    return /[a-z]/i.test(normalized) ? normalized.toUpperCase() : normalized;
+  }
+  if (normalized.startsWith('Key') && normalized.length === 4) {
+    return normalized.substring(3).toUpperCase();
+  }
+  if (normalized.startsWith('Digit') && normalized.length === 6) {
+    return normalized.substring(5);
+  }
+  return normalized;
+}
+
+function keyDisplayToCanonicalKey(key: string): string {
+  const normalized = key.trim();
+  const mapping: Record<string, string> = {
+    '↑': 'ArrowUp',
+    '↓': 'ArrowDown',
+    '←': 'ArrowLeft',
+    '→': 'ArrowRight',
+    Spc: 'Space',
+    Space: 'Space',
+    Ret: 'Enter',
+    Enter: 'Enter',
+    Esc: 'Escape',
+    Escape: 'Escape',
+  };
+  if (mapping[normalized]) {
+    return mapping[normalized];
+  }
+  if (normalized.length === 1 && /[a-z]/i.test(normalized)) {
+    return normalized.toUpperCase();
+  }
+  return normalized;
+}
+
+function canonicalKeyFromCode(code: string): string {
+  if (code.startsWith('Key')) {
+    return code.substring(3).toUpperCase();
+  }
+  if (code.startsWith('Digit')) {
+    return code.substring(5);
+  }
+  if (code === 'Space') {
+    return 'Space';
+  }
+  if (code === 'Semicolon') {
+    return ';';
+  }
+  return code;
+}
+
+function eventKeyCode(e: KeyboardEvent): number {
+  if (e.which && e.which > 0) {
+    return e.which;
+  }
+  const keyCode = (e as unknown as { keyCode?: number }).keyCode;
+  if (keyCode && keyCode > 0) {
+    return keyCode;
+  }
+  if (e.code) {
+    return getKeyCode(canonicalKeyFromCode(e.code));
+  }
+  if (e.key && e.key.length === 1) {
+    return e.key.toUpperCase().charCodeAt(0);
+  }
+  return 0;
 }
 
 
@@ -617,10 +699,38 @@ class BoloClientWorld extends ClientWorld {
 
   //### Input handlers.
 
+  selectBuildTool(toolType: 'forest' | 'road' | 'building' | 'pillbox' | 'mine'): void {
+    const selector = `#tool-${toolType}`;
+    const toolInput = document.querySelector(selector) as HTMLInputElement | null;
+    if (toolInput) {
+      toolInput.click();
+      return;
+    }
+    if (this.renderer) {
+      this.renderer.currentTool = toolType;
+    }
+    if (this.input) {
+      this.input.focus();
+    }
+  }
+
+  dropMineAtCurrentTile(): void {
+    if (!this.player) { return; }
+    const currentCell = this.player.cell || this.map?.cellAtWorld?.(this.player.x, this.player.y);
+    if (!currentCell) { return; }
+    this.buildOrder('mine', 0, currentCell);
+  }
+
   handleKeydown(e: KeyboardEvent): void {
     if (!this.ws || !this.player) { return; }
-    const action = this.settingsManager ? this.settingsManager.getReverseKeyCode(e.which) : null;
-    switch (action || e.which) {
+    const keyCode = eventKeyCode(e);
+    const action = this.settingsManager ? this.settingsManager.getReverseKeyCode(keyCode) : null;
+    switch (action || keyCode) {
+      case 49: return this.selectBuildTool('forest');
+      case 50: return this.selectBuildTool('road');
+      case 51: return this.selectBuildTool('building');
+      case 52: return this.selectBuildTool('pillbox');
+      case 53: return this.selectBuildTool('mine');
       case 'up':
       case 38: return this.ws.send(net.START_ACCELERATING);
       case 'down':
@@ -631,8 +741,10 @@ class BoloClientWorld extends ClientWorld {
       case 39: return this.ws.send(net.START_TURNING_CW);
       case 'fire':
       case 32: return this.ws.send(net.START_SHOOTING);
-      case 'build': return this.player.builder.select('wall');
-      case 'dropMine': return this.player.builder.select('mine');
+      case 'build': return this.selectBuildTool('building');
+      case 'dropMine':
+        if (e.repeat) { return; }
+        return this.dropMineAtCurrentTile();
       case 'chat': return this.openChat();
       case 'teamChat': return this.openChat({ team: true });
     }
@@ -640,8 +752,9 @@ class BoloClientWorld extends ClientWorld {
 
   handleKeyup(e: KeyboardEvent): void {
     if (!this.ws || !this.player) { return; }
-    const action = this.settingsManager ? this.settingsManager.getReverseKeyCode(e.which) : null;
-    switch (action || e.which) {
+    const keyCode = eventKeyCode(e);
+    const action = this.settingsManager ? this.settingsManager.getReverseKeyCode(keyCode) : null;
+    switch (action || keyCode) {
       case 'up':
       case 38: return this.ws.send(net.STOP_ACCELERATING);
       case 'down':
@@ -847,17 +960,34 @@ class BoloClientWorld extends ClientWorld {
     }
 
     const actions = Object.keys(DEFAULT_KEY_MAPPINGS);
+    const keyBindingGroups: Array<{ title: string; actions: string[] }> = [
+      { title: 'Drive tank', actions: ['up', 'down'] },
+      { title: 'Rotate tank', actions: ['left', 'right'] },
+      { title: 'Weapons', actions: ['fire', 'dropMine'] },
+      { title: 'Build', actions: ['build'] },
+      { title: 'Communication', actions: ['chat', 'teamChat'] },
+    ];
+
+    const groupedActions = new Set(keyBindingGroups.flatMap((g) => g.actions));
+    const remainingActions = actions.filter((action) => !groupedActions.has(action));
+    if (remainingActions.length > 0) {
+      keyBindingGroups.push({ title: 'Other', actions: remainingActions });
+    }
+
     let rowsHtml = '';
-    for (const action of actions) {
-      const currentKey = this.settingsManager.getKeyMapping(action);
-      const displayName = (KEY_DISPLAY_NAMES as Record<string, string>)[action] || action;
-      rowsHtml += `
-        <div class="settings-row">
-          <span class="settings-label">${displayName}</span>
-          <span class="settings-default">${(DEFAULT_KEY_MAPPINGS as Record<string, string>)[action]}</span>
-          <input type="text" class="settings-override" data-action="${action}" value="${currentKey}" maxlength="20" placeholder="Override">
-        </div>
-      `;
+    for (const group of keyBindingGroups) {
+      rowsHtml += `<div class="settings-key-group"><div class="settings-key-group-title">${group.title}</div>`;
+      for (const action of group.actions) {
+        const currentKey = this.settingsManager.getKeyMapping(action);
+        const displayName = (KEY_DISPLAY_NAMES as Record<string, string>)[action] || action;
+        rowsHtml += `
+          <div class="settings-key-row">
+            <span class="settings-key-label">${displayName}:</span>
+            <input type="text" class="settings-override settings-key-input" data-action="${action}" data-keycanonical="${currentKey}" value="${keyToDisplayLabel(currentKey)}" maxlength="20">
+          </div>
+        `;
+      }
+      rowsHtml += '</div>';
     }
 
     const currentVolume = Math.round((this.settingsManager.getVolume() || 0.5) * 100);
@@ -868,7 +998,7 @@ class BoloClientWorld extends ClientWorld {
       <div class="settings-content settings-two-column-layout">
         <div class="settings-left-column">
           <div class="settings-section">
-            <div class="settings-section-title">Volume</div>
+            <div class="settings-section-title">SFX Volume</div>
             <div class="settings-volume">
               <input type="range" class="settings-volume-slider" min="0" max="100" value="${currentVolume}">
               <span class="settings-volume-value">${currentVolume}%</span>
@@ -888,7 +1018,7 @@ class BoloClientWorld extends ClientWorld {
         <div class="settings-right-column">
           <div class="settings-section">
             <div class="settings-section-title">Key Bindings</div>
-            <p class="settings-instructions">Customize key bindings. Leave override empty to use defaults. Press Backspace to reset.</p>
+            <p class="settings-instructions">Press a key to remap. Press Backspace to reset that action.</p>
             ${rowsHtml}
           </div>
         </div>
@@ -918,15 +1048,15 @@ class BoloClientWorld extends ClientWorld {
 
         if (ke.code === 'Backspace') {
           const action = (ke.target as HTMLInputElement).getAttribute('data-action')!;
-          (ke.target as HTMLInputElement).value = (DEFAULT_KEY_MAPPINGS as Record<string, string>)[action] || '';
+          const canonicalDefault = (DEFAULT_KEY_MAPPINGS as Record<string, string>)[action] || '';
+          (ke.target as HTMLInputElement).setAttribute('data-keycanonical', canonicalDefault);
+          (ke.target as HTMLInputElement).value = keyToDisplayLabel(canonicalDefault);
           return;
         }
 
-        let key = ke.code;
-        if (key.startsWith('Key')) { key = key.substring(3); }
-        else if (key === 'Space') { key = 'Space'; }
-        else if (key.startsWith('Digit')) { key = key.substring(5); }
-        (ke.target as HTMLInputElement).value = key;
+        const canonical = canonicalKeyFromCode(ke.code);
+        (ke.target as HTMLInputElement).setAttribute('data-keycanonical', canonical);
+        (ke.target as HTMLInputElement).value = keyToDisplayLabel(canonical);
       });
       input.addEventListener('keyup', (e: Event) => {
         e.preventDefault();
@@ -942,7 +1072,9 @@ class BoloClientWorld extends ClientWorld {
       sm.reset();
       for (const action of actions) {
         const input = dialog.find(`input[data-action="${action}"]`);
-        input.value = (DEFAULT_KEY_MAPPINGS as Record<string, string>)[action];
+        const canonicalDefault = (DEFAULT_KEY_MAPPINGS as Record<string, string>)[action];
+        (input._el as HTMLInputElement | null)?.setAttribute('data-keycanonical', canonicalDefault);
+        input.value = keyToDisplayLabel(canonicalDefault);
       }
       const volumeSlider = dialog.find('.settings-volume-slider');
       volumeSlider.value = String(Math.round((sm.getVolume() || 0.5) * 100));
@@ -968,7 +1100,8 @@ class BoloClientWorld extends ClientWorld {
 
       for (const action of actions) {
         const input = dialog.find(`input[data-action="${action}"]`);
-        let key = input.value.trim();
+        let key = ((input._el as HTMLInputElement | null)?.getAttribute('data-keycanonical') || input.value || '').trim();
+        key = keyDisplayToCanonicalKey(key);
         if (!key) { key = (DEFAULT_KEY_MAPPINGS as Record<string, string>)[action]; }
         newMappings[action] = key;
       }
@@ -980,7 +1113,9 @@ class BoloClientWorld extends ClientWorld {
           const prevAction = usedKeys.get(normalizedKey)!;
           newMappings[prevAction] = (DEFAULT_KEY_MAPPINGS as Record<string, string>)[prevAction];
           const prevInput = dialog.find(`input[data-action="${prevAction}"]`);
-          prevInput.value = (DEFAULT_KEY_MAPPINGS as Record<string, string>)[prevAction];
+          const canonicalDefault = (DEFAULT_KEY_MAPPINGS as Record<string, string>)[prevAction];
+          (prevInput._el as HTMLInputElement | null)?.setAttribute('data-keycanonical', canonicalDefault);
+          prevInput.value = keyToDisplayLabel(canonicalDefault);
         } else {
           usedKeys.set(normalizedKey, action);
         }
