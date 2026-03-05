@@ -1,16 +1,22 @@
-import TEAM_COLORS from './team_colors';
+import TEAM_COLORS, { MAX_SELECTABLE_TEAMS, SELECTABLE_TEAM_COLORS } from './team_colors';
 
 describe('team_colors', () => {
-  test('exports six expected team color entries in order', () => {
-    expect(TEAM_COLORS).toHaveLength(6);
+  test('exports eight expected team color entries in order', () => {
+    expect(TEAM_COLORS).toHaveLength(8);
     expect(TEAM_COLORS.map(c => c.name)).toEqual([
       'red',
       'blue',
       'green',
       'cyan',
       'yellow',
-      'magenta'
+      'magenta',
+      'orange',
+      'brown'
     ]);
+  });
+
+  test('selectable colors match configured max', () => {
+    expect(SELECTABLE_TEAM_COLORS).toHaveLength(MAX_SELECTABLE_TEAMS);
   });
 
   test('each color channel is within byte range', () => {

@@ -196,14 +196,7 @@ body {
   display: inline-block;
 }
 
-.team-radio-red.team-radio-red  { background: #dc2626; }
-.team-radio-blue.team-radio-blue { background: #2563eb; }
-
-input[type="radio"]:checked + .team-radio-red {
-  box-shadow: 0 0 0 3px white;
-}
-
-input[type="radio"]:checked + .team-radio-blue {
+input[type="radio"]:checked + .team-radio {
   box-shadow: 0 0 0 3px white;
 }
 

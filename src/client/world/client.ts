@@ -8,6 +8,7 @@ import { decodeBase64 } from '../base64';
 import * as net from '../../net';
 import * as helpers from '../../helpers';
 import $ from '../../dom';
+import { SELECTABLE_TEAM_COLORS } from '../../team_colors';
 import { SettingsManager, DEFAULT_KEY_MAPPINGS, KEY_DISPLAY_NAMES } from '../settings';
 import BoloClientWorldMixin from './mixin';
 
@@ -129,22 +130,56 @@ const JOIN_DIALOG_TEMPLATE = `
   <input type="text" id="join-nick-field" name="join-nick-field" maxlength=20 autoComplete="off"
          class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white mb-4 focus:outline-none focus:border-blue-500"></input>
   <p class="text-gray-300 mb-2">Choose a side:</p>
-  <div id="join-team" class="flex gap-4 mb-2">
-    <label class="flex items-center cursor-pointer p-2">
-      <input type="radio" id="join-team-red" name="join-team" value="red" class="sr-only">
-      <span class="w-8 h-8 rounded-full bg-red-600 border-2 border-transparent hover:border-white transition-colors team-radio team-radio-red"></span>
-      <span class="ml-2 text-gray-300">Red</span>
-      <span id="join-team-red-count" class="ml-1 text-gray-500 text-sm"></span>
-    </label>
-    <label class="flex items-center cursor-pointer p-2">
-      <input type="radio" id="join-team-blue" name="join-team" value="blue" class="sr-only">
-      <span class="w-8 h-8 rounded-full bg-blue-600 border-2 border-transparent hover:border-white transition-colors team-radio team-radio-blue"></span>
-      <span class="ml-2 text-gray-300">Blue</span>
-      <span id="join-team-blue-count" class="ml-1 text-gray-500 text-sm"></span>
-    </label>
+  <div id="join-team" class="grid grid-cols-2 gap-2 mb-2">
   </div>
   <button id="join-submit" class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium transition-colors">Join Game</button>
 </div>`;
+
+function toTitleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function teamNameForIndex(teamIndex: number): string | null {
+  if (teamIndex < 0 || teamIndex >= SELECTABLE_TEAM_COLORS.length) {
+    return null;
+  }
+  return SELECTABLE_TEAM_COLORS[teamIndex].name;
+}
+
+function teamIndexForName(teamName: string): number {
+  if (!teamName) {
+    return -1;
+  }
+  return SELECTABLE_TEAM_COLORS.findIndex(color => color.name === teamName);
+}
+
+function winnerColorHex(winner: string): string {
+  const teamIndex = teamIndexForName(winner);
+  if (teamIndex < 0) {
+    return '#9ca3af';
+  }
+  const color = SELECTABLE_TEAM_COLORS[teamIndex];
+  return `rgb(${color.r}, ${color.g}, ${color.b})`;
+}
+
+function buildJoinTeamOptions(): string {
+  return SELECTABLE_TEAM_COLORS.map((teamColor) => {
+    const safeName = teamColor.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    const label = toTitleCase(teamColor.name);
+    const color = `rgb(${teamColor.r}, ${teamColor.g}, ${teamColor.b})`;
+    return `
+    <label class="flex items-center cursor-pointer p-2">
+      <input type="radio" id="join-team-${safeName}" name="join-team" value="${teamColor.name}" class="sr-only">
+      <span class="w-8 h-8 rounded-full border-2 border-transparent hover:border-white transition-colors team-radio" style="background: ${color}"></span>
+      <span class="ml-2 text-gray-300">${label}</span>
+      <span id="join-team-${safeName}-count" class="ml-1 text-gray-500 text-sm"></span>
+    </label>`;
+  }).join('');
+}
+
+function teamSafeName(teamName: string): string {
+  return teamName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+}
 
 
 const LAUNCH_TEMPLATE = `
@@ -374,19 +409,34 @@ class BoloClientWorld extends ClientWorld {
     this.vignette = null;
     this.loop.start();
 
-    let red = 0, blue = 0;
+    const teamCounts = new Array(SELECTABLE_TEAM_COLORS.length).fill(0);
     for (const tank of this.tanks) {
-      if (tank.team === 0) { red++; }
-      if (tank.team === 1) { blue++; }
+      if (tank.team >= 0 && tank.team < teamCounts.length) {
+        teamCounts[tank.team]++;
+      }
     }
-    const disadvantaged = blue < red ? 'blue' : 'red';
+
+    let disadvantagedTeamIndex = 0;
+    for (let i = 1; i < teamCounts.length; i++) {
+      if (teamCounts[i] < teamCounts[disadvantagedTeamIndex]) {
+        disadvantagedTeamIndex = i;
+      }
+    }
+    const disadvantagedTeamName = teamNameForIndex(disadvantagedTeamIndex) || SELECTABLE_TEAM_COLORS[0].name;
 
     this.joinDialog = createModal(JOIN_DIALOG_TEMPLATE, { persistent: true });
 
-    const redCountSpan = this.joinDialog.find('#join-team-red-count');
-    const blueCountSpan = this.joinDialog.find('#join-team-blue-count');
-    if (redCountSpan) redCountSpan.textContent = `(${red})`;
-    if (blueCountSpan) blueCountSpan.textContent = `(${blue})`;
+    const joinTeamContainer = this.joinDialog.find('#join-team');
+    joinTeamContainer.innerHTML = buildJoinTeamOptions();
+
+    for (let i = 0; i < SELECTABLE_TEAM_COLORS.length; i++) {
+      const name = SELECTABLE_TEAM_COLORS[i].name;
+      const safeName = teamSafeName(name);
+      const countSpan = this.joinDialog.find(`#join-team-${safeName}-count`);
+      if (countSpan) {
+        countSpan.textContent = `(${teamCounts[i]})`;
+      }
+    }
 
     const nickField = this.joinDialog.find('#join-nick-field');
     nickField.value = this.settingsManager!.getNickname() || '';
@@ -396,8 +446,8 @@ class BoloClientWorld extends ClientWorld {
     });
 
     const savedTeam = this.settingsManager!.getTeam();
-    const teamToSelect = (savedTeam && (savedTeam === 'red' || savedTeam === 'blue')) ? savedTeam : disadvantaged;
-    const teamRadio = this.joinDialog.find(`#join-team-${teamToSelect}`);
+    const teamToSelect = teamIndexForName(savedTeam) >= 0 ? savedTeam : disadvantagedTeamName;
+    const teamRadio = this.joinDialog.find(`#join-team-${teamSafeName(teamToSelect)}`);
     if (teamRadio && teamRadio._el) {
       teamRadio.checked = true;
       const label = teamRadio._el.closest('label');
@@ -414,12 +464,7 @@ class BoloClientWorld extends ClientWorld {
     const nick = this.joinDialog!.find('#join-nick-field').value;
     const teamRadio = this.joinDialog!.find('#join-team input:checked');
     const teamValue = teamRadio ? teamRadio.value : '';
-    let team: number;
-    switch (teamValue) {
-      case 'red':  team = 0; break;
-      case 'blue': team = 1; break;
-      default:     team = -1;
-    }
+    const team = teamIndexForName(teamValue);
     if (!nick || team === -1) { return; }
 
     this.settingsManager!.setNickname(nick);
@@ -706,7 +751,7 @@ class BoloClientWorld extends ClientWorld {
         this.receiveChat(this.objects[data.idx], data.text, { team: true });
         break;
       case 'gameEnd':
-        if ((data.winner === 'red' || data.winner === 'blue') && !this.gameOver) {
+        if (typeof data.winner === 'string' && teamIndexForName(data.winner) !== -1 && !this.gameOver) {
           this.showGameOverDialog(data.winner);
         }
         break;
@@ -883,8 +928,8 @@ class BoloClientWorld extends ClientWorld {
   showGameOverDialog(winner: string): void {
     this.gameOver = true;
 
-    const color = winner === 'red' ? '#dc2626' : '#2563eb';
-    const teamName = winner === 'red' ? 'Red' : 'Blue';
+    const color = winnerColorHex(winner);
+    const teamName = toTitleCase(winner);
 
     const overlay = $.create('div', {
       class: 'fixed inset-0 z-50 flex items-center justify-center',
@@ -908,7 +953,7 @@ class BoloClientWorld extends ClientWorld {
   }
 
   startConfetti(team: string): void {
-    const color = team === 'red' ? '#dc2626' : '#2563eb';
+    const color = winnerColorHex(team);
     const canvas = document.createElement('canvas');
     canvas.id = 'confetti-canvas';
     canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;';

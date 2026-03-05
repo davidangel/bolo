@@ -21,7 +21,7 @@ class GameLogger {
     this.emit('log', `created: ${url}`, { gid });
   }
 
-  playerJoined(gid: string, nick: string, team: 'red' | 'blue'): void {
+  playerJoined(gid: string, nick: string, team: string): void {
     this.emit('log', `${nick} joined the ${team} team.`, { gid, nick, team });
   }
 
@@ -33,7 +33,7 @@ class GameLogger {
     this.emit('log', `Game expired due to inactivity for ${inactiveForSeconds} seconds.`, { gid, inactiveForSeconds });
   }
 
-  gameEnd(gid: string, winningTeam: 'red' | 'blue'): void {
+  gameEnd(gid: string, winningTeam: string): void {
     this.emit('log', `Game ended. Winning team: ${winningTeam}.`, { gid, winningTeam });
   }
 

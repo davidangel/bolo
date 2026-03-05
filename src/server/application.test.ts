@@ -36,7 +36,7 @@ import createBoloApp from './application';
 import gameLogger from './game_logger';
 
 describe('server application game end', () => {
-  test('logs gameEnd once with winning red team', () => {
+  test('logs gameEnd once with single-team control', () => {
     const app = createBoloApp({
       general: { base: '', maxgames: 10 },
       web: { port: 4000, log: false },

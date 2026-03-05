@@ -18,6 +18,7 @@ import BoloWorldMixin from '../world_mixin';
 import { registerWithWorld } from '../objects/all';
 import Tank from '../objects/tank';
 import WorldMap from '../world_map';
+import { SELECTABLE_TEAM_COLORS } from '../team_colors';
 import * as net from '../net';
 import { TICK_LENGTH_MS } from '../constants';
 
@@ -30,7 +31,7 @@ class BoloServerWorld extends ServerWorld {
   oddTick: boolean = false;
   gameOverTimer: number | null = null;
   gameEndLogged: boolean = false;
-  winningTeam: 'red' | 'blue' | null = null;
+  winningTeam: string | null = null;
   gid: string = '';
   url: string = '';
   lastActivity: number = 0;
@@ -70,26 +71,20 @@ class BoloServerWorld extends ServerWorld {
       return;
     }
 
-    let redBases = 0;
-    let blueBases = 0;
-    let neutralBases = 0;
+    const controllingTeams = new Set<number>();
+    let hasNeutralOrInvalidBase = false;
 
     for (const base of this.map.bases as any[]) {
-      if (base.team === 0) {
-        redBases++;
-      } else if (base.team === 1) {
-        blueBases++;
+      if (typeof base.team === 'number' && base.team >= 0 && base.team < SELECTABLE_TEAM_COLORS.length) {
+        controllingTeams.add(base.team);
       } else {
-        neutralBases++;
+        hasNeutralOrInvalidBase = true;
       }
     }
 
-    let winner: 'red' | 'blue' | null = null;
-    if (neutralBases === 0 && redBases > 0 && blueBases === 0) {
-      winner = 'red';
-    } else if (neutralBases === 0 && blueBases > 0 && redBases === 0) {
-      winner = 'blue';
-    }
+    const winner = !hasNeutralOrInvalidBase && controllingTeams.size === 1
+      ? SELECTABLE_TEAM_COLORS[Array.from(controllingTeams)[0]]?.name || null
+      : null;
 
     if (!winner) {
       this.gameOverTimer = null;
@@ -266,12 +261,12 @@ class BoloServerWorld extends ServerWorld {
     if (typeof message.nick !== 'string' || message.nick.length > 20) {
       this.onError(ws, new Error("Client specified invalid nickname."));
     }
-    if (typeof message.team !== 'number' || !(message.team === 0 || message.team === 1)) {
+    if (typeof message.team !== 'number' || message.team < 0 || message.team >= SELECTABLE_TEAM_COLORS.length) {
       this.onError(ws, new Error("Client specified invalid team."));
     }
 
     (ws as any).tank = this.spawn(Tank, message.team);
-    const teamName = message.team === 0 ? 'red' : 'blue';
+    const teamName = SELECTABLE_TEAM_COLORS[message.team]?.name || 'unknown';
     gameLogger.playerJoined(this.gid, message.nick, teamName);
     let packet: any = this.changesPacket(true);
     packet = Buffer.from(packet).toString('base64');
