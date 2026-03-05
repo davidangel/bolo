@@ -188,24 +188,26 @@ const LAUNCH_TEMPLATE = `
   <div id="map-selector" class="mb-6">
     <label class="block text-gray-400 text-sm mb-2">Select Map:</label>
     <div class="flex gap-3 items-start mb-4">
-      <select id="map-select" class="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500">
-        <option value="">Loading maps...</option>
-      </select>
+      <div class="flex-1">
+        <select id="map-select" class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white focus:outline-none focus:border-blue-500 mb-3">
+          <option value="">Loading maps...</option>
+        </select>
+        <details class="group border border-gray-700 rounded">
+          <summary class="px-3 py-2 cursor-pointer text-gray-300 select-none">Other game settings</summary>
+          <div class="px-3 pb-3 pt-1 overflow-hidden max-h-0 opacity-0 transition-all duration-500 group-open:max-h-40 group-open:opacity-100">
+            <label class="flex items-center gap-2 text-gray-300 text-sm cursor-pointer">
+              <input id="create-hide-enemy-mines" type="checkbox" checked>
+              <span>Mines are hidden from enemy tanks</span>
+            </label>
+            <label class="flex items-center gap-2 text-gray-300 text-sm cursor-pointer mt-2">
+              <input id="create-tournament-mode" type="checkbox">
+              <span>Tournament Mode (full ammo only on first spawn)</span>
+            </label>
+          </div>
+        </details>
+      </div>
       <div id="map-preview" class="map-preview w-32 h-32 rounded border border-gray-600 bg-gray-900 flex items-center justify-center overflow-hidden"></div>
     </div>
-    <details class="mb-4 border border-gray-700 rounded">
-      <summary class="px-3 py-2 cursor-pointer text-gray-300 select-none">Game settings</summary>
-      <div class="px-3 pb-3 pt-1">
-        <label class="flex items-center gap-2 text-gray-300 cursor-pointer">
-          <input id="create-hide-enemy-mines" type="checkbox" checked>
-          <span>Mines are hidden from enemy tanks</span>
-        </label>
-        <label class="flex items-center gap-2 text-gray-300 cursor-pointer mt-2">
-          <input id="create-tournament-mode" type="checkbox">
-          <span>Tournament Mode (full ammo only on first spawn)</span>
-        </label>
-      </div>
-    </details>
     <button id="create-game-submit" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition-colors">Create Game</button>
   </div>
 
