@@ -33,6 +33,7 @@ interface TankWorld {
   tanks: Tank[];
   gameSettings?: {
     tournamentMode?: boolean;
+    autoSlowdown?: boolean;
   };
 }
 
@@ -65,6 +66,7 @@ export class Tank extends BoloObject {
   fireball: ObjectRef<Fireball> | null = null;
   cell: WorldMapCell | null = null;
   tank_idx: number = 0;
+  autoSlowdown: boolean = true;
 
   private _finalizeListenerAdded: boolean = false;
   private _hasSpawnedOnce: boolean = false;
@@ -294,10 +296,17 @@ export class Tank extends BoloObject {
   accelerate(): void {
     const maxSpeed = this.cell!.getTankSpeed(this as any);
     let acceleration: number;
-    if (this.speed > maxSpeed)                       acceleration = -0.25;
-    else if (this.accelerating === this.braking)     acceleration =  0.00;
-    else if (this.accelerating)                      acceleration =  0.25;
-    else                                             acceleration = -0.25;
+    if (this.speed > maxSpeed) {
+      acceleration = -0.25;
+    } else if (this.accelerating && this.braking) {
+      acceleration = 0.00;
+    } else if (this.accelerating) {
+      acceleration = 0.25;
+    } else if (this.braking || this.shouldAutoSlowdown()) {
+      acceleration = -0.25;
+    } else {
+      acceleration = 0.00;
+    }
 
     if (acceleration > 0 && this.speed < maxSpeed) {
       this.speed = min(maxSpeed, this.speed + acceleration);
@@ -306,13 +315,36 @@ export class Tank extends BoloObject {
     }
   }
 
+  shouldAutoSlowdown(): boolean {
+    const w = this.world as unknown as TankWorld & {
+      player?: Tank;
+      settingsManager?: { getAutoSlowdown?: () => boolean };
+    };
+
+    if (typeof this.autoSlowdown === 'boolean') {
+      return this.autoSlowdown;
+    }
+
+    if (w.player === this && w.settingsManager?.getAutoSlowdown) {
+      return !!w.settingsManager.getAutoSlowdown();
+    }
+
+    if (typeof w.gameSettings?.autoSlowdown === 'boolean') {
+      return w.gameSettings.autoSlowdown;
+    }
+
+    return true;
+  }
+
   fixPosition(): void {
     const w = this.world as unknown as TankWorld;
     if (this.cell!.getTankSpeed(this as any) === 0) {
       const halftile = TILE_SIZE_WORLD / 2;
       this.x = (this.x! % TILE_SIZE_WORLD) >= halftile ? this.x! + 1 : this.x! - 1;
       this.y = (this.y! % TILE_SIZE_WORLD) >= halftile ? this.y! + 1 : this.y! - 1;
-      this.speed = max(0, this.speed - 1);
+      if (this.shouldAutoSlowdown()) {
+        this.speed = max(0, this.speed - 1);
+      }
     }
 
     for (const other of w.tanks) {
@@ -362,7 +394,7 @@ export class Tank extends BoloObject {
     }
 
     if ((dx !== 0) || (dy !== 0)) {
-      if (slowDown) this.speed = max(0, this.speed - 1);
+      if (slowDown && this.shouldAutoSlowdown()) this.speed = max(0, this.speed - 1);
       const oldcell = this.cell;
       this.updateCell();
       if (oldcell !== this.cell) this.checkNewCell(oldcell);

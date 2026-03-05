@@ -277,6 +277,12 @@ class BoloServerWorld extends ServerWorld {
     switch (parsed.command) {
       case 'msg':     this.onTextMessage(ws, tank, parsed); return;
       case 'teamMsg': this.onTeamTextMessage(ws, tank, parsed); return;
+      case 'playerSettings': {
+        if (typeof parsed.autoSlowdown === 'boolean') {
+          tank.autoSlowdown = parsed.autoSlowdown;
+        }
+        return;
+      }
       default: {
         const sanitized = parsed.command.slice(0, 10).replace(/\W+/, '');
         return this.onError(ws, new Error(`Received an unknown JSON command: ${sanitized}`));
@@ -294,6 +300,9 @@ class BoloServerWorld extends ServerWorld {
     }
 
     (ws as any).tank = this.spawn(Tank, message.team);
+    if (typeof message.autoSlowdown === 'boolean') {
+      (ws as any).tank.autoSlowdown = message.autoSlowdown;
+    }
     const teamName = SELECTABLE_TEAM_COLORS[message.team]?.name || 'unknown';
     gameLogger.playerJoined(this.gid, message.nick, teamName);
     let packet: any = this.changesPacket(true);

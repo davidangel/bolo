@@ -139,4 +139,40 @@ describe('server application game settings', () => {
       fs.rmSync(tmpMapPath, { force: true });
     }
   });
+
+  test('applies player autoSlowdown from join and runtime playerSettings updates', () => {
+    const app = createBoloApp({
+      general: { base: '', maxgames: 10 },
+      web: { port: 0, log: false },
+    }) as any;
+
+    const map = new Map();
+    const game = app.createGame(Buffer.from(map.dump())) as any;
+
+    const ws: any = {
+      send: jest.fn(),
+      on: jest.fn(),
+      close: jest.fn(),
+    };
+
+    const fakeTank: any = {
+      idx: 123,
+      autoSlowdown: true,
+      name: '',
+      team: 0,
+    };
+    const spawnSpy = jest.spyOn(game, 'spawn').mockReturnValue(fakeTank);
+
+    try {
+      game.onJoinMessage(ws, { nick: 'Tester', team: 0, autoSlowdown: false });
+      expect(ws.tank).toBeTruthy();
+      expect(ws.tank.autoSlowdown).toBe(false);
+
+      game.onJsonMessage(ws, JSON.stringify({ command: 'playerSettings', autoSlowdown: true }));
+      expect(ws.tank.autoSlowdown).toBe(true);
+    } finally {
+      spawnSpy.mockRestore();
+      game.close();
+    }
+  });
 });

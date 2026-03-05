@@ -230,10 +230,35 @@ export default class BaseRenderer {
       if (b.order !== b.states.inTank && b.order !== b.states.parachuting) {
         this.drawBuilderIndicator(b);
       }
-      this.drawReticle();
+      if (this.shouldShowReticle()) {
+        this.drawReticle();
+      }
     }
     this.drawNames();
     this.drawCursor();
+  }
+
+  shouldShowReticle(): boolean {
+    const player = this.world.player;
+    if (!player || player.armour === 255) {
+      return false;
+    }
+
+    const autoGunsight = !!this.world?.settingsManager?.getAutoGunsight?.();
+    if (!autoGunsight) {
+      return true;
+    }
+
+    const builder = player.builder?.$;
+    if (builder && builder.order !== builder.states.inTank) {
+      return false;
+    }
+
+    if (this.currentTool != null) {
+      return false;
+    }
+
+    return true;
   }
 
   drawReticle(): void {

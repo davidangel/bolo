@@ -10,6 +10,9 @@ const DEFAULT_KEY_MAPPINGS: Record<string, string> = {
   teamChat: 'KeyT',
 };
 
+const DEFAULT_AUTO_SLOWDOWN = true;
+const DEFAULT_AUTO_GUNSIGHT = false;
+
 const KEY_DISPLAY_NAMES: Record<string, string> = {
   up: 'Move Up',
   down: 'Move Down',
@@ -78,12 +81,16 @@ class SettingsManager {
   volume: number;
   nickname: string;
   team: string;
+  autoSlowdown: boolean;
+  autoGunsight: boolean;
 
   constructor() {
     this.keyMappings = { ...DEFAULT_KEY_MAPPINGS };
     this.volume = 0.5;
     this.nickname = '';
     this.team = 'red';
+    this.autoSlowdown = DEFAULT_AUTO_SLOWDOWN;
+    this.autoGunsight = DEFAULT_AUTO_GUNSIGHT;
     this.load();
   }
 
@@ -96,6 +103,8 @@ class SettingsManager {
         this.volume = data.volume ?? 0.5;
         this.nickname = data.nickname || '';
         this.team = data.team || 'red';
+        this.autoSlowdown = typeof data.autoSlowdown === 'boolean' ? data.autoSlowdown : DEFAULT_AUTO_SLOWDOWN;
+        this.autoGunsight = typeof data.autoGunsight === 'boolean' ? data.autoGunsight : DEFAULT_AUTO_GUNSIGHT;
       }
     } catch (e) {
       console.warn('Failed to load settings:', e);
@@ -108,7 +117,9 @@ class SettingsManager {
         keyMappings: this.keyMappings,
         volume: this.volume,
         nickname: this.nickname,
-        team: this.team
+        team: this.team,
+        autoSlowdown: this.autoSlowdown,
+        autoGunsight: this.autoGunsight
       }));
     } catch (e) {
       console.warn('Failed to save settings:', e);
@@ -166,8 +177,26 @@ class SettingsManager {
     return this.volume;
   }
 
+  setAutoSlowdown(value: boolean): void {
+    this.autoSlowdown = value;
+  }
+
+  getAutoSlowdown(): boolean {
+    return this.autoSlowdown;
+  }
+
+  setAutoGunsight(value: boolean): void {
+    this.autoGunsight = value;
+  }
+
+  getAutoGunsight(): boolean {
+    return this.autoGunsight;
+  }
+
   reset(): void {
     this.keyMappings = { ...DEFAULT_KEY_MAPPINGS };
+    this.autoSlowdown = DEFAULT_AUTO_SLOWDOWN;
+    this.autoGunsight = DEFAULT_AUTO_GUNSIGHT;
     this.save();
   }
 }

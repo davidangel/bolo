@@ -38,12 +38,16 @@ interface ModalOptions {
   title?: string;
   persistent?: boolean;
   onClose?: () => void;
+  dialogClass?: string;
 }
 
 function createModal(content: string, options: ModalOptions = {}): ModalAPI {
   const overlay = $.create('div', { class: 'fixed inset-0 bg-black/70 z-50 flex items-center justify-center' });
   const dialog = document.createElement('div');
   dialog.className = 'bg-gray-800 rounded-lg shadow-2xl p-6 min-w-[320px] max-w-md border border-gray-700';
+  if (options.dialogClass) {
+    dialog.className += ` ${options.dialogClass}`;
+  }
   dialog.innerHTML = content;
 
   if (options.title) {
@@ -499,13 +503,21 @@ class BoloClientWorld extends ClientWorld {
     this.settingsManager!.save();
     this.joinDialog!.close();
     this.joinDialog = null;
-    this.ws!.send(JSON.stringify({ command: 'join', nick, team }));
+    this.ws!.send(JSON.stringify({
+      command: 'join',
+      nick,
+      team,
+      autoSlowdown: this.settingsManager!.getAutoSlowdown(),
+    }));
     this.input.focus();
   }
 
   // Callback after the welcome message was received.
   receiveWelcome(tank: any): void {
     this.player = tank;
+    if (this.settingsManager) {
+      this.player.autoSlowdown = this.settingsManager.getAutoSlowdown();
+    }
     this.renderer.initHud();
     this.initChat();
     this.map.retile();
@@ -849,20 +861,36 @@ class BoloClientWorld extends ClientWorld {
     }
 
     const currentVolume = Math.round((this.settingsManager.getVolume() || 0.5) * 100);
+    const currentAutoSlowdown = this.settingsManager.getAutoSlowdown();
+    const currentAutoGunsight = this.settingsManager.getAutoGunsight();
     const content = `
     <div class="settings-wrapper">
-      <div class="settings-content">
-        <div class="settings-section">
-          <div class="settings-section-title">Volume</div>
-          <div class="settings-volume">
-            <input type="range" class="settings-volume-slider" min="0" max="100" value="${currentVolume}">
-            <span class="settings-volume-value">${currentVolume}%</span>
+      <div class="settings-content settings-two-column-layout">
+        <div class="settings-left-column">
+          <div class="settings-section">
+            <div class="settings-section-title">Volume</div>
+            <div class="settings-volume">
+              <input type="range" class="settings-volume-slider" min="0" max="100" value="${currentVolume}">
+              <span class="settings-volume-value">${currentVolume}%</span>
+            </div>
+            <div class="mt-3 space-y-2">
+              <label class="flex items-center gap-2 text-gray-200 text-sm cursor-pointer">
+                <input type="checkbox" class="settings-auto-slowdown" ${currentAutoSlowdown ? 'checked' : ''}>
+                <span>Auto Slowdown</span>
+              </label>
+              <label class="flex items-center gap-2 text-gray-200 text-sm cursor-pointer">
+                <input type="checkbox" class="settings-auto-gunsight" ${currentAutoGunsight ? 'checked' : ''}>
+                <span>Enable automatic show & hide of gunsight</span>
+              </label>
+            </div>
           </div>
         </div>
-        <div class="settings-section">
-          <div class="settings-section-title">Key Bindings</div>
-          <p class="settings-instructions">Customize key bindings. Leave override empty to use defaults. Press Backspace to reset.</p>
-          ${rowsHtml}
+        <div class="settings-right-column">
+          <div class="settings-section">
+            <div class="settings-section-title">Key Bindings</div>
+            <p class="settings-instructions">Customize key bindings. Leave override empty to use defaults. Press Backspace to reset.</p>
+            ${rowsHtml}
+          </div>
         </div>
         <div class="settings-buttons">
           <button class="settings-reset">Reset to Defaults</button>
@@ -876,7 +904,7 @@ class BoloClientWorld extends ClientWorld {
       </div>
     `;
 
-    this.settingsDialog = createModal(content, { title: 'Settings' });
+    this.settingsDialog = createModal(content, { title: 'Settings', dialogClass: 'settings-modal-dialog' });
 
     const dialog = this.settingsDialog;
     const sm = this.settingsManager;
@@ -919,6 +947,10 @@ class BoloClientWorld extends ClientWorld {
       const volumeSlider = dialog.find('.settings-volume-slider');
       volumeSlider.value = String(Math.round((sm.getVolume() || 0.5) * 100));
       dialog.find('.settings-volume-value').textContent = volumeSlider.value + '%';
+      const autoSlowdownInput = dialog.find('.settings-auto-slowdown');
+      autoSlowdownInput.checked = sm.getAutoSlowdown();
+      const autoGunsightInput = dialog.find('.settings-auto-gunsight');
+      autoGunsightInput.checked = sm.getAutoGunsight();
     });
 
     const volumeSlider = dialog.find('.settings-volume-slider');
@@ -957,6 +989,21 @@ class BoloClientWorld extends ClientWorld {
       for (const [action, key] of Object.entries(newMappings)) {
         sm.setKeyMapping(action, key);
       }
+
+      const autoSlowdownInput = dialog.find('.settings-auto-slowdown');
+      sm.setAutoSlowdown(autoSlowdownInput.checked);
+      if (this.player) {
+        this.player.autoSlowdown = autoSlowdownInput.checked;
+      }
+      if (this.ws) {
+        this.ws.send(JSON.stringify({
+          command: 'playerSettings',
+          autoSlowdown: autoSlowdownInput.checked,
+        }));
+      }
+      const autoGunsightInput = dialog.find('.settings-auto-gunsight');
+      sm.setAutoGunsight(autoGunsightInput.checked);
+
       sm.save();
       dialog.close();
       this.settingsDialog = null;

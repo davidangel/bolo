@@ -26,8 +26,25 @@ body {
   scrollbar-gutter: both-edges;
 }
 
+.settings-modal-dialog {
+  width: min(96vw, 900px);
+  max-width: none;
+}
+
 .settings-content {
   margin: 0 0.8rem;
+}
+
+.settings-two-column-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) minmax(320px, 520px);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.settings-left-column,
+.settings-right-column {
+  min-width: 0;
 }
 
 .settings-section {
@@ -143,6 +160,13 @@ body {
   align-items: center;
   margin-top: 1rem;
   padding-top: 1rem;
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .settings-two-column-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .settings-reset {
