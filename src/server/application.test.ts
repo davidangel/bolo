@@ -178,7 +178,7 @@ describe('server application game settings', () => {
     }
   });
 
-  test('lists public games including zero-player games', async () => {
+  test('lists only active public games and excludes ended games', async () => {
     const app = createBoloApp({
       general: { base: '', maxgames: 10 },
       web: { port: 0, log: false },
@@ -189,24 +189,23 @@ describe('server application game settings', () => {
     const emptyPublicGame = app.createGame(Buffer.from(map.dump()), { public: true }) as any;
     app.createGame(Buffer.from(map.dump()), { public: false });
     publicGame.tanks = [{ name: 'Alice' }, { name: 'Bob' }];
+    emptyPublicGame.gameEndLogged = true;
 
     try {
       app.listen(0);
       const port = (app.httpServer.address() as any).port as number;
       const listed = await requestJson(port, '/api/public-games');
       expect(Array.isArray(listed)).toBe(true);
-      expect(listed.length).toBe(2);
+      expect(listed.length).toBe(1);
       const byGid: Record<string, any> = {};
       for (const game of listed) {
         byGid[game.gid] = game;
       }
       expect(byGid[publicGame.gid]).toBeTruthy();
-      expect(byGid[emptyPublicGame.gid]).toBeTruthy();
+      expect(byGid[emptyPublicGame.gid]).toBeFalsy();
       expect(typeof byGid[publicGame.gid].mapName).toBe('string');
       expect(Array.isArray(byGid[publicGame.gid].playerNames)).toBe(true);
       expect(byGid[publicGame.gid].playerNames).toEqual(['Alice', 'Bob']);
-      expect(Array.isArray(byGid[emptyPublicGame.gid].playerNames)).toBe(true);
-      expect(byGid[emptyPublicGame.gid].playerNames).toEqual([]);
     } finally {
       app.shutdown();
     }

@@ -485,7 +485,7 @@ class Application {
     this.connectServer.use('/api/public-games', (req: any, res: any, next: any) => {
       if (req.method !== 'GET') { return next(); }
       const publicGames = Object.values(this.games)
-        .filter((game) => game.gameSettings.public)
+        .filter((game) => game.gameSettings.public && !game.gameEndLogged)
         .map((game) => {
           const playerNames = game.tanks
             .map((tank) => (typeof tank?.name === 'string' ? tank.name.trim() : ''))
