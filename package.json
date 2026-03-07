@@ -1,6 +1,6 @@
 {
   "name": "bolo",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Bolo, a game of tank warfare, rewritten for modern browsers.",
   "homepage": "https://github.com/davidangel/bolo",
   "repository": {
@@ -8,9 +8,9 @@
     "url": "https://github.com/davidangel/bolo.git"
   },
   "author": {
-    "name": "Stéphan Kochen",
-    "email": "stephan@kochen.nl",
-    "url": "http://stephan.kochen.nl/"
+    "name": "David Angel",
+    "email": "david@davidangel.net",
+    "url": "https://davidangel.net/"
   },
   "scripts": {
     "build:css": "npx tailwindcss -i ./css/bolo.css -o ./css/compiled.css --minify",
