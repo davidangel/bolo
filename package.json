@@ -1,7 +1,7 @@
 {
   "name": "bolo",
   "version": "0.0.5",
-  "description": "Bolo, a game of tank warfare, rewritten for modern browsers.",
+  "description": "Bolo, a game of tank warfare, rewritten for modern browsers. Originally a top-down game of tank warfare originally written by Stuart Cheshire for the BBC Micro and Apple Macintosh, and also notably rewritten for Windows and Linux by John Morrison.",
   "homepage": "https://github.com/davidangel/bolo",
   "repository": {
     "type": "git",
