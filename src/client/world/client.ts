@@ -209,7 +209,7 @@ const LAUNCH_TEMPLATE = `
                   <span>Tournament Mode (full ammo only on first spawn)</span>
                 </label>
                 <label class="flex items-center gap-2 text-gray-300 text-sm cursor-pointer mt-2">
-                  <input id="create-public-game" type="checkbox">
+                  <input id="create-public-game" type="checkbox" checked>
                   <span>Public - show in active game list</span>
                 </label>
               </div>
