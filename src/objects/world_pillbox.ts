@@ -179,7 +179,7 @@ export class WorldPillbox extends BoloObject {
     for (const tank of w.tanks) {
       if (tank.armour !== 255 && !this.owner?.$.isAlly?.(tank)) {
         const d = distance({ x: this.x!, y: this.y! }, { x: tank.x!, y: tank.y! });
-        if (d <= 2048 && d < targetDistance) {
+        if (d <= 1919 && d < targetDistance) {
           target = tank; targetDistance = d;
         }
       }
