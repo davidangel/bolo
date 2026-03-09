@@ -1,6 +1,7 @@
 /node_modules/*
 /js/bolo-bundle*.js
 /js/bolo-bundle*.js.map
+/js/.dev-build-id
 /bolo.manifest
 /coverage/
 coverage/
