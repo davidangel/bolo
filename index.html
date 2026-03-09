@@ -9,12 +9,48 @@
 <meta property="og:type" content="website">
 <link rel="shortcut icon" href="images/favicon.png">
 <link rel="stylesheet" href="css/compiled.css">
-<script src="js/bolo-bundle.ff4d0f3.js"></script>
+<script src="js/bolo-bundle.620f542.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  var params = new URLSearchParams(window.location.search || '');
+  var devHot = params.get('devhot') === '1' || window.localStorage.getItem('bolo-dev-hot') === '1';
+  if (params.get('devhot') === '1') {
+    window.localStorage.setItem('bolo-dev-hot', '1');
+  }
+  window.__BOLO_DEV_HOT__ = devHot;
+
   var World = (typeof window !== 'undefined' && window.World) ? window.World : ((typeof require === 'function') ? require('./src/client') : undefined);
-  world = new World();
-  world.start();
+  window.world = new World();
+  window.world.start();
+
+  if (!devHot) {
+    return;
+  }
+
+  var lastBuild = null;
+  var checkForBuild = function() {
+    fetch('/js/.dev-build-id?ts=' + Date.now(), { cache: 'no-store' })
+      .then(function(res) {
+        if (!res.ok) return null;
+        return res.text();
+      })
+      .then(function(text) {
+        if (!text) return;
+        var nextBuild = text.trim();
+        if (!nextBuild) return;
+        if (lastBuild === null) {
+          lastBuild = nextBuild;
+          return;
+        }
+        if (nextBuild !== lastBuild) {
+          window.location.reload();
+        }
+      })
+      .catch(function() {});
+  };
+
+  window.setInterval(checkForBuild, 800);
+  checkForBuild();
 });
 </script>
 </head>

@@ -15,6 +15,7 @@
   "scripts": {
     "build:css": "npx tailwindcss -i ./css/bolo.css -o ./css/compiled.css --minify",
     "build:js": "node ./scripts/build-js.js",
+    "dev:hot": "node ./scripts/dev-hot.js",
     "build": "npm run build:css && npm run build:js",
     "test": "jest",
     "test:watch": "jest --watch",

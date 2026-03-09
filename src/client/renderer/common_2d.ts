@@ -86,13 +86,21 @@ export default class Common2dRenderer extends BaseRenderer {
     ctx.globalAlpha = opacity;
   }
 
-  drawTile(tx: number, ty: number, dx: number, dy: number, ctx?: CanvasRenderingContext2D): void {
-    const target = ctx || this.ensureCtx();
+  drawTile(
+    tx: number,
+    ty: number,
+    dx: number,
+    dy: number,
+    sizeOrCtx?: number | CanvasRenderingContext2D,
+    ctx?: CanvasRenderingContext2D
+  ): void {
+    const size = typeof sizeOrCtx === 'number' ? sizeOrCtx : TILE_SIZE_PIXELS;
+    const target = (typeof sizeOrCtx === 'number' ? ctx : sizeOrCtx) || this.ensureCtx();
     if (!target) { return; }
     target.drawImage(
       this.images.base as HTMLImageElement,
       tx * TILE_SIZE_PIXELS, ty * TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS,
-      dx,                    dy,                    TILE_SIZE_PIXELS, TILE_SIZE_PIXELS
+      dx,                    dy,                    size, size
     );
   }
 
@@ -125,7 +133,15 @@ export default class Common2dRenderer extends BaseRenderer {
     return source;
   }
 
-  drawStyledTile(tx: number, ty: number, style: number | undefined, dx: number, dy: number, ctx?: CanvasRenderingContext2D): void {
+  drawStyledTile(
+    tx: number,
+    ty: number,
+    style: number | undefined,
+    dx: number,
+    dy: number,
+    sizeOrCtx?: number | CanvasRenderingContext2D,
+    ctx?: CanvasRenderingContext2D
+  ): void {
     let source: HTMLCanvasElement | HTMLImageElement;
     if (style !== undefined && TEAM_COLORS[style]) {
       if (!this.prestyled[style]) {
@@ -135,12 +151,13 @@ export default class Common2dRenderer extends BaseRenderer {
     } else {
       source = this.images.styled as HTMLImageElement;
     }
-    const target = ctx || this.ensureCtx();
+    const size = typeof sizeOrCtx === 'number' ? sizeOrCtx : TILE_SIZE_PIXELS;
+    const target = (typeof sizeOrCtx === 'number' ? ctx : sizeOrCtx) || this.ensureCtx();
     if (!target) { return; }
     target.drawImage(
       source,
       tx * TILE_SIZE_PIXELS, ty * TILE_SIZE_PIXELS, TILE_SIZE_PIXELS, TILE_SIZE_PIXELS,
-      dx,                    dy,                    TILE_SIZE_PIXELS, TILE_SIZE_PIXELS
+      dx,                    dy,                    size, size
     );
   }
 

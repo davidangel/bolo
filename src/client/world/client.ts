@@ -637,6 +637,12 @@ class BoloClientWorld extends ClientWorld {
     }
 
     this.joinDialog.find('#join-submit').addEventListener('click', () => this.join());
+
+    const isDevHot = typeof window !== 'undefined' && (window as any).__BOLO_DEV_HOT__ === true;
+    const savedNick = this.settingsManager!.getNickname();
+    if (isDevHot && savedNick) {
+      this.join();
+    }
   }
 
   join(): void {
