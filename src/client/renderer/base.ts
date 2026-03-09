@@ -23,6 +23,7 @@ export default class BaseRenderer {
   tankIndicators: Record<string, HTMLElement> = {};
   pillIndicators: Array<[HTMLElement, any]> = [];
   baseIndicators: Array<[HTMLElement, any]> = [];
+  reticleScreenPos: [number, number] | null = null;
 
   constructor(world: any) {
     this.world = world;
@@ -264,9 +265,18 @@ export default class BaseRenderer {
   drawReticle(): void {
     const distance = this.world.player.firingRange * TILE_SIZE_PIXELS;
     const rad = ((256 - this.world.player.direction) * 2 * PI) / 256;
-    const x = round((this.world.player.x / PIXEL_SIZE_WORLD) + (cos(rad) * distance)) - (TILE_SIZE_PIXELS / 2);
-    const y = round((this.world.player.y / PIXEL_SIZE_WORLD) + (sin(rad) * distance)) - (TILE_SIZE_PIXELS / 2);
-    this.drawTile(17, 4, x, y);
+    const targetX = (this.world.player.x / PIXEL_SIZE_WORLD) + (cos(rad) * distance) - (TILE_SIZE_PIXELS / 2);
+    const targetY = (this.world.player.y / PIXEL_SIZE_WORLD) + (sin(rad) * distance) - (TILE_SIZE_PIXELS / 2);
+
+    if (!this.reticleScreenPos) {
+      this.reticleScreenPos = [targetX, targetY];
+    } else {
+      const smoothing = 0.35;
+      this.reticleScreenPos[0] += (targetX - this.reticleScreenPos[0]) * smoothing;
+      this.reticleScreenPos[1] += (targetY - this.reticleScreenPos[1]) * smoothing;
+    }
+
+    this.drawTile(17, 4, this.reticleScreenPos[0], this.reticleScreenPos[1]);
   }
 
   drawCursor(): void {
