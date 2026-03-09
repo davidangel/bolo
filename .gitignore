@@ -11,3 +11,4 @@ coverage/
 !/package.json
 # /maps/**
 .DS_Store
+js/.dev-build-id
