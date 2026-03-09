@@ -100,7 +100,7 @@ export default class BaseRenderer {
   draw(): void {
     let x: number | null = null;
     let y: number | null = null;
-    if (this.world.player) {
+    if (this.world.player && !this.world.pillViewActive) {
       ({ x, y } = this.world.player);
       if (this.world.player.fireball != null) { ({ x, y } = this.world.player.fireball.$); }
     }

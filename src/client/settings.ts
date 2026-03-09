@@ -8,6 +8,7 @@ const DEFAULT_KEY_MAPPINGS: Record<string, string> = {
   build: 'KeyB',
   chat: 'KeyR',
   teamChat: 'KeyT',
+  pillView: 'KeyP',
 };
 
 const DEFAULT_AUTO_SLOWDOWN = true;
@@ -24,6 +25,7 @@ const KEY_DISPLAY_NAMES: Record<string, string> = {
   build: 'Build Wall',
   chat: 'Chat',
   teamChat: 'Team Chat',
+  pillView: 'Pill View',
 };
 
 const KEY_NAME_TO_CODE: Record<string, number> = {
@@ -103,6 +105,17 @@ class SettingsManager {
       if (saved) {
         const data = JSON.parse(saved);
         this.keyMappings = { ...DEFAULT_KEY_MAPPINGS, ...(data.keyMappings || {}) };
+        const savedMappings = (data && data.keyMappings) ? data.keyMappings as Record<string, string> : {};
+        if (!Object.prototype.hasOwnProperty.call(savedMappings, 'pillView')) {
+          this.keyMappings.pillView = DEFAULT_KEY_MAPPINGS.pillView;
+          if (this.keyMappings.teamChat === this.keyMappings.pillView) {
+            this.keyMappings.teamChat = DEFAULT_KEY_MAPPINGS.teamChat;
+          }
+        }
+        if (savedMappings.teamChat === 'KeyY' && savedMappings.pillView === 'KeyT') {
+          this.keyMappings.teamChat = DEFAULT_KEY_MAPPINGS.teamChat;
+          this.keyMappings.pillView = DEFAULT_KEY_MAPPINGS.pillView;
+        }
         this.volume = data.volume ?? 0.5;
         this.nickname = data.nickname || '';
         this.team = data.team || 'red';

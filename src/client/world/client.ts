@@ -349,6 +349,8 @@ class BoloClientWorld extends ClientWorld {
   chatInput: HTMLInputElement & { team?: boolean } | null = null;
   hideEnemyMinesFromEnemyTanks: boolean = true;
   tournamentMode: boolean = false;
+  pillViewActive: boolean = false;
+  currentPillViewIndex: number = 0;
 
   declare map: any;
   declare soundkit: any;
@@ -785,6 +787,35 @@ class BoloClientWorld extends ClientWorld {
     this.buildOrder('mine', 0, currentCell);
   }
 
+  togglePillView(): void {
+    if (!this.player || !this.map?.pills) { return; }
+    
+    const teamPills = this.map.pills.filter((pill: any) => 
+      pill.team === this.player.team && 
+      !pill.inTank && 
+      !pill.carried &&
+      pill.x != null &&
+      pill.y != null
+    );
+    
+    if (teamPills.length === 0) { 
+      this.pillViewActive = false;
+      return; 
+    }
+    
+    if (!this.pillViewActive) {
+      this.pillViewActive = true;
+      this.currentPillViewIndex = 0;
+    } else {
+      this.currentPillViewIndex = (this.currentPillViewIndex + 1) % teamPills.length;
+    }
+    
+    const pill = teamPills[this.currentPillViewIndex];
+    if (this.renderer) {
+      this.renderer.lastCenter = [pill.x, pill.y];
+    }
+  }
+
   handleKeydown(e: KeyboardEvent): void {
     if (!this.ws || !this.player) { return; }
     const keyCode = eventKeyCode(e);
@@ -796,13 +827,21 @@ class BoloClientWorld extends ClientWorld {
       case 52: return this.selectBuildTool('pillbox');
       case 53: return this.selectBuildTool('mine');
       case 'up':
-      case 38: return this.ws.send(net.START_ACCELERATING);
+      case 38:
+        this.pillViewActive = false;
+        return this.ws.send(net.START_ACCELERATING);
       case 'down':
-      case 40: return this.ws.send(net.START_BRAKING);
+      case 40:
+        this.pillViewActive = false;
+        return this.ws.send(net.START_BRAKING);
       case 'left':
-      case 37: return this.ws.send(net.START_TURNING_CCW);
+      case 37:
+        this.pillViewActive = false;
+        return this.ws.send(net.START_TURNING_CCW);
       case 'right':
-      case 39: return this.ws.send(net.START_TURNING_CW);
+      case 39:
+        this.pillViewActive = false;
+        return this.ws.send(net.START_TURNING_CW);
       case 'fire':
       case 32: return this.ws.send(net.START_SHOOTING);
       case 'build': return this.selectBuildTool('building');
@@ -811,6 +850,9 @@ class BoloClientWorld extends ClientWorld {
         return this.dropMineAtCurrentTile();
       case 'chat': return this.openChat();
       case 'teamChat': return this.openChat({ team: true });
+      case 'pillView':
+        if (e.repeat) { return; }
+        return this.togglePillView();
     }
   }
 
@@ -1030,6 +1072,7 @@ class BoloClientWorld extends ClientWorld {
       { title: 'Weapons', actions: ['fire', 'dropMine'] },
       { title: 'Build', actions: ['build'] },
       { title: 'Communication', actions: ['chat', 'teamChat'] },
+      { title: 'HUD', actions: ['pillView'] },
     ];
 
     const groupedActions = new Set(keyBindingGroups.flatMap((g) => g.actions));
