@@ -32,6 +32,9 @@ interface TankLike extends BoloObject {
 
 
 export class WorldBase extends BoloObject {
+  static readonly OWNERSHIP_REGEN_DELAY_TICKS = 1500;
+  static readonly OWNERSHIP_REGEN_INTERVAL_TICKS = 50;
+
   // MapObject constructor fields (set when loaded from map)
   owner_idx: number = 255;
   armour: number = 0;
@@ -42,6 +45,9 @@ export class WorldBase extends BoloObject {
   refueling: ObjectRef<TankLike> | null = null;
   refuelCounter: number = 0;
   cell: WorldMapCell | null = null;
+  owningTeam: number = 255;
+  ownedTicks: number = 0;
+  regenCounter: number = 0;
 
   // Dual constructor: world-only (1 arg) or map-loaded (7 args)
   constructor(
@@ -92,6 +98,13 @@ export class WorldBase extends BoloObject {
   }
 
   updateOwner(): void {
+    const newTeam = this.owner?.$.team ?? 255;
+    if (newTeam !== this.owningTeam) {
+      this.ownedTicks = 0;
+      this.regenCounter = 0;
+      this.owningTeam = newTeam;
+    }
+
     if (this.owner) {
       this.owner_idx = this.owner.$.tank_idx;
       (this as { team: number | null }).team = this.owner.$.team;
@@ -109,6 +122,8 @@ export class WorldBase extends BoloObject {
   }
 
   update(): void {
+    this.updateOwnedRegen();
+
     if (this.refueling &&
         ((this.refueling.$.cell !== this.cell) || (this.refueling.$.armour === 255))) {
       this.ref('refueling', null);
@@ -136,6 +151,34 @@ export class WorldBase extends BoloObject {
     } else {
       this.refuelCounter = 1;
     }
+  }
+
+  updateOwnedRegen(): void {
+    const w = this.world as unknown as WorldBaseWorld;
+    if (!w.authority) return;
+
+    const team = this.owner?.$.team;
+    if (team === undefined || team === null) {
+      this.ownedTicks = 0;
+      this.regenCounter = 0;
+      this.owningTeam = 255;
+      return;
+    }
+
+    if (team !== this.owningTeam) {
+      this.ownedTicks = 0;
+      this.regenCounter = 0;
+      this.owningTeam = team;
+      return;
+    }
+
+    if (++this.ownedTicks < WorldBase.OWNERSHIP_REGEN_DELAY_TICKS) return;
+    if (++this.regenCounter < WorldBase.OWNERSHIP_REGEN_INTERVAL_TICKS) return;
+
+    this.regenCounter = 0;
+    this.armour = min(255, this.armour + 1);
+    this.shells = min(255, this.shells + 1);
+    this.mines = min(255, this.mines + 1);
   }
 
   findSubject(): void {
