@@ -12,6 +12,7 @@ describe('Tank tournament mode spawn behavior', () => {
       addTank: jest.fn(),
       removeTank: jest.fn(),
       map: {
+        pills: [],
         getRandomStart: () => ({
           cell: {
             getWorldCoordinates: () => [128, 128],
@@ -56,5 +57,48 @@ describe('Tank tournament mode spawn behavior', () => {
     expect(tank.shells).toBe(40);
     expect(tank.mines).toBe(0);
     expect(tank.armour).toBe(40);
+  });
+
+  test('awards kill when shell impact sinks tank in deep water', () => {
+    const world = createWorld(false);
+    const attacker = new Tank(world as any);
+    const victim = new Tank(world as any);
+
+    victim.armour = 40;
+    victim.onBoat = true;
+    victim.cell = {
+      isType: (tile: string) => tile === '^',
+    } as any;
+
+    victim.takeShellHit({ direction: 0, attribution: { $: attacker } } as any);
+
+    expect(attacker.kills).toBe(1);
+    expect(victim.deaths).toBe(1);
+    expect(victim.armour).toBe(255);
+  });
+
+  test('awards kill when tank sinks within 200ms after shell hit', () => {
+    const nowSpy = jest.spyOn(Date, 'now');
+    nowSpy.mockReturnValue(1000);
+
+    const world = createWorld(false);
+    const attacker = new Tank(world as any);
+    const victim = new Tank(world as any);
+
+    victim.armour = 40;
+    victim.onBoat = false;
+    victim.cell = { isType: () => false } as any;
+
+    victim.takeShellHit({ direction: 0, attribution: { $: attacker } } as any);
+    expect(attacker.kills).toBe(0);
+
+    nowSpy.mockReturnValue(1100);
+    victim.sink();
+
+    expect(attacker.kills).toBe(1);
+    expect(victim.deaths).toBe(1);
+    expect(victim.armour).toBe(255);
+
+    nowSpy.mockRestore();
   });
 });

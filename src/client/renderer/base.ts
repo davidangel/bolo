@@ -23,6 +23,10 @@ export default class BaseRenderer {
   tankIndicators: Record<string, HTMLElement> = {};
   pillIndicators: Array<[HTMLElement, any]> = [];
   baseIndicators: Array<[HTMLElement, any]> = [];
+  statKills: HTMLElement | null = null;
+  statDeaths: HTMLElement | null = null;
+  statScore: HTMLElement | null = null;
+  statScoreIcon: HTMLElement | null = null;
   reticleScreenPos: [number, number] | null = null;
 
   constructor(world: any) {
@@ -293,6 +297,7 @@ export default class BaseRenderer {
     this.initHudTankStatus();
     this.initHudPillboxes();
     this.initHudBases();
+    this.initHudStats();
     this.initHudToolSelect();
     this.initHudNotices();
     this.initSettingsButton();
@@ -354,6 +359,47 @@ export default class BaseRenderer {
       container.appendChild(node);
       this.baseIndicators.push([node, base]);
     }
+  }
+
+  initHudStats(): void {
+    const container = $.create('div', { id: 'statsStatus' });
+    this.hud!.appendChild(container);
+
+    const firstLine = $.create('div', { class: 'stat-line' });
+    container.appendChild(firstLine);
+
+    const killsGroup = $.create('span', { class: 'stat-group-left' });
+    firstLine.appendChild(killsGroup);
+
+    const killsIcon = $.create('span', { class: 'stat-icon' });
+    killsIcon.textContent = '☠';
+    killsGroup.appendChild(killsIcon);
+
+    this.statKills = $.create('span', { class: 'stat-value' }) as HTMLElement;
+    this.statKills.textContent = '0';
+    killsGroup.appendChild(this.statKills);
+
+    const scoreGroup = $.create('span', { class: 'stat-group-right' });
+    firstLine.appendChild(scoreGroup);
+
+    this.statScoreIcon = $.create('span', { class: 'stat-icon' }) as HTMLElement;
+    this.statScoreIcon.textContent = '★';
+    scoreGroup.appendChild(this.statScoreIcon);
+
+    this.statScore = $.create('span', { class: 'stat-value' }) as HTMLElement;
+    this.statScore.textContent = '0';
+    scoreGroup.appendChild(this.statScore);
+
+    const deathsLine = $.create('div', { class: 'stat-line' });
+    container.appendChild(deathsLine);
+
+    const deathsIcon = $.create('span', { class: 'stat-icon' });
+    deathsIcon.textContent = '†';
+    deathsLine.appendChild(deathsIcon);
+
+    this.statDeaths = $.create('span', { class: 'stat-value' }) as HTMLElement;
+    this.statDeaths.textContent = '0';
+    deathsLine.appendChild(this.statDeaths);
   }
 
   initHudToolSelect(): void {
@@ -434,6 +480,24 @@ export default class BaseRenderer {
 
     const p = this.world.player;
     if (!p) { return; }
+
+    if (this.statKills && this.statDeaths) {
+      this.statKills.textContent = String(p.kills || 0);
+      this.statDeaths.textContent = String(p.deaths || 0);
+    }
+
+    if (this.statScore && this.statScoreIcon && p.team !== undefined && p.team >= 0 && p.team <= 5) {
+      const scores: number[] = this.world.teamScores || [0, 0, 0, 0, 0, 0];
+      const myScore = scores[p.team] || 0;
+      const rank = 1 + scores.filter(score => score > myScore).length;
+      const suffix = ['th', 'st', 'nd', 'rd'];
+      const v = rank % 100;
+      this.statScore.textContent = String(rank) + (suffix[(v - 20) % 10] || suffix[v] || suffix[0]);
+
+      const color = TEAM_COLORS[p.team] || { r: 192, g: 192, b: 240 };
+      this.statScoreIcon.style.color = `rgb(${color.r},${color.g},${color.b})`;
+    }
+
     if (!p.hudLastStatus) { p.hudLastStatus = {}; }
     for (const prop in this.tankIndicators) {
       const node = this.tankIndicators[prop];

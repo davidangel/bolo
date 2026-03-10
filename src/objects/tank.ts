@@ -37,6 +37,12 @@ interface TankWorld {
   };
 }
 
+interface KillAttribution {
+  attribution?: { $: Tank } | null;
+}
+
+const SINK_KILL_GRACE_MS = 200;
+
 
 export class Tank extends BoloObject {
   readonly styled = true;
@@ -60,6 +66,8 @@ export class Tank extends BoloObject {
   firingRange: number = 7;
   waterTimer: number = 0;
   onBoat: boolean = false;
+  kills: number = 0;
+  deaths: number = 0;
   respawnTimer?: number;
 
   builder: ObjectRef<Builder> | null = null;
@@ -67,6 +75,8 @@ export class Tank extends BoloObject {
   cell: WorldMapCell | null = null;
   tank_idx: number = 0;
   autoSlowdown: boolean = true;
+  lastShellAttacker: Tank | null = null;
+  lastShellHitAtMs: number = 0;
 
   private _finalizeListenerAdded: boolean = false;
   private _hasSpawnedOnce: boolean = false;
@@ -165,6 +175,8 @@ export class Tank extends BoloObject {
     p('B', 'reload');
     p('B', 'firingRange', { tx: (v: unknown) => (v as number) * 2, rx: (v: unknown) => (v as number) / 2 });
     p('B', 'waterTimer');
+    p('B', 'kills');
+    p('B', 'deaths');
     p('f', 'accelerating');
     p('f', 'braking');
     p('f', 'turningClockwise');
@@ -194,20 +206,41 @@ export class Tank extends BoloObject {
   increaseRange(): void { this.firingRange = min(7, this.firingRange + 0.5); }
   decreaseRange(): void { this.firingRange = max(1, this.firingRange - 0.5); }
 
-  takeShellHit(shell: { direction: number }): number {
+  private awardKillTo(attacker?: Tank | null): void {
+    if (attacker && attacker !== this) {
+      attacker.kills = min(255, (attacker.kills || 0) + 1);
+    }
+  }
+
+  private markShellAttacker(attacker?: Tank | null): void {
+    if (attacker && attacker !== this) {
+      this.lastShellAttacker = attacker;
+      this.lastShellHitAtMs = Date.now();
+    }
+  }
+
+  private recentShellAttacker(): Tank | null {
+    if (!this.lastShellAttacker) return null;
+    if ((Date.now() - this.lastShellHitAtMs) > SINK_KILL_GRACE_MS) return null;
+    return this.lastShellAttacker;
+  }
+
+  takeShellHit(shell: { direction: number } & KillAttribution): number {
     const w = this.world as unknown as TankWorld;
+    this.markShellAttacker(shell.attribution?.$ ?? null);
     this.armour -= 5;
     if (this.armour < 0) {
+      const attacker = shell.attribution?.$ ?? null;
       const largeExplosion = (this.shells + this.mines) > 20;
       this.ref('fireball', w.spawn(Fireball, this.x, this.y, shell.direction, largeExplosion) as Fireball);
-      this.kill();
+      this.kill(attacker);
     } else {
       this.slideTicks = 8;
       this.slideDirection = shell.direction;
       if (this.onBoat) {
         this.onBoat = false;
         this.speed = 0;
-        if (this.cell!.isType('^')) this.sink();
+        if (this.cell!.isType('^')) this.sink(shell.attribution?.$ ?? null);
       }
     }
     return sounds.HIT_TANK;
@@ -444,14 +477,19 @@ export class Tank extends BoloObject {
     this.onBoat = true;
   }
 
-  sink(): void {
+  sink(attacker?: Tank | null): void {
     const w = this.world as unknown as TankWorld;
     w.soundEffect(sounds.TANK_SINKING, this.x, this.y, this);
-    this.kill();
+    this.kill(attacker ?? this.recentShellAttacker());
   }
 
-  kill(): void {
+  kill(attacker?: Tank | null): void {
+    if (this.armour === 255) return;
+    this.awardKillTo(attacker);
+    this.lastShellAttacker = null;
+    this.lastShellHitAtMs = 0;
     this.dropPillboxes();
+    this.deaths = min(255, (this.deaths || 0) + 1);
     this.x = null; this.y = null;
     this.armour = 255;
     this.respawnTimer = 255;

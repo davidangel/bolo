@@ -438,3 +438,45 @@ canvas {
 
 .msg      { color: #ffffff }
 .msg-team { color: #00ff00 }
+
+#statsStatus {
+  position: absolute;
+  top: 8px;
+  right: 44px;
+  width: 129px;
+  height: 48px;
+  border: 2px solid #c0c0f0;
+  background: black;
+  font-family: monospace;
+  font-size: 11px;
+  color: #c0c0f0;
+}
+
+#statsStatus .stat-line {
+  margin: 0 0 0 4px;
+  display: flex;
+  align-items: center;
+}
+
+#statsStatus .stat-line:first-child {
+  justify-content: space-between;
+  padding-right: 4px;
+}
+
+#statsStatus .stat-group-left,
+#statsStatus .stat-group-right {
+  display: flex;
+  align-items: center;
+}
+
+#statsStatus .stat-icon {
+  font-size: 14px;
+  margin-right: 6px;
+  display: inline-block;
+  width: 18px;
+  text-align: center;
+}
+
+#statsStatus .stat-value {
+  font-weight: bold;
+}

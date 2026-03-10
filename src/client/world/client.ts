@@ -9,6 +9,7 @@ import * as net from '../../net';
 import * as helpers from '../../helpers';
 import $ from '../../dom';
 import { SELECTABLE_TEAM_COLORS } from '../../team_colors';
+import { TILE_SIZE_PIXELS } from '../../constants';
 import { SettingsManager, DEFAULT_KEY_MAPPINGS, KEY_DISPLAY_NAMES, getKeyCode } from '../settings';
 import BoloClientWorldMixin from './mixin';
 
@@ -343,6 +344,7 @@ class BoloClientWorld extends ClientWorld {
   joinDialog: ModalAPI | null = null;
   settingsDialog: ModalAPI | null = null;
   gameOver: boolean = false;
+  endGameTankIconCache: Record<number, string> = {};
   _messageHandler: ((e: MessageEvent) => void) | null = null;
   chatMessages: HTMLElement | null = null;
   chatContainer: HTMLElement | null = null;
@@ -351,6 +353,7 @@ class BoloClientWorld extends ClientWorld {
   tournamentMode: boolean = false;
   pillViewActive: boolean = false;
   currentPillViewIndex: number = 0;
+  teamScores: number[] = [0, 0, 0, 0, 0, 0];
 
   declare map: any;
   declare soundkit: any;
@@ -990,6 +993,12 @@ class BoloClientWorld extends ClientWorld {
         return offset - startOffset;
       }
 
+      case net.TEAMSCORES_MESSAGE: {
+        const [scores, bytes] = unpack('HHHHHH', dataArr, offset);
+        this.teamScores = scores.map((score) => (score as number) / 100);
+        return bytes;
+      }
+
       case net.TINY_UPDATE_MESSAGE: {
         const [[idx], bytes] = unpack('H', dataArr, offset);
         return bytes + this.netUpdate(this.objects[idx as number], dataArr, offset + bytes);
@@ -1264,6 +1273,51 @@ class BoloClientWorld extends ClientWorld {
     const color = winnerColorHex(winner);
     const teamName = toTitleCase(winner);
 
+    const players = (this.tanks || [])
+      .filter((tank: any) => !!tank)
+      .map((tank: any) => {
+        const kills = Number(tank.kills || 0);
+        const deaths = Number(tank.deaths || 0);
+        const ratio = deaths > 0 ? (kills / deaths) : (kills > 0 ? kills : 0);
+        const teamIndex = typeof tank.team === 'number' ? tank.team : -1;
+        const teamColor = (teamIndex >= 0 && teamIndex < SELECTABLE_TEAM_COLORS.length)
+          ? SELECTABLE_TEAM_COLORS[teamIndex]
+          : { r: 156, g: 163, b: 175 };
+        return {
+          name: (typeof tank.name === 'string' && tank.name.trim().length > 0) ? tank.name : 'Unnamed',
+          kills,
+          deaths,
+          ratio,
+          teamIndex,
+          teamColor: `rgb(${teamColor.r}, ${teamColor.g}, ${teamColor.b})`,
+        };
+      })
+      .sort((a: any, b: any) => {
+        if (b.ratio !== a.ratio) return b.ratio - a.ratio;
+        if (b.kills !== a.kills) return b.kills - a.kills;
+        if (a.deaths !== b.deaths) return a.deaths - b.deaths;
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 3);
+
+    const leaderboardHtml = players.length > 0
+      ? players.map((player: any, index: number) => {
+        const ratioText = player.deaths > 0 ? player.ratio.toFixed(2) : (player.kills > 0 ? `${player.kills.toFixed(2)}*` : '0.00');
+        const tankIcon = this.getEndGameTankIcon(player.teamIndex, player.teamColor);
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border-bottom:${index < players.length - 1 ? '1px solid #374151' : 'none'};font-size:14px;">
+          <span style="color:#e5e7eb;max-width:210px;display:flex;align-items:center;gap:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ${tankIcon}
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${index + 1}. ${player.name}</span>
+          </span>
+          <span style="color:#d1d5db;display:flex;gap:10px;align-items:center;">
+            <span>☠ ${player.kills}</span>
+            <span>† ${player.deaths}</span>
+            <span style="color:#9ca3af;min-width:54px;text-align:right;">${ratioText}</span>
+          </span>
+        </div>`;
+      }).join('')
+      : '<div style="padding:8px 10px;color:#9ca3af;font-size:14px;">No player stats available.</div>';
+
     const overlay = $.create('div', {
       class: 'fixed inset-0 z-50 flex items-center justify-center',
       style: 'background: rgba(0,0,0,0.8);'
@@ -1275,6 +1329,13 @@ class BoloClientWorld extends ClientWorld {
     dialog.innerHTML = `
       <h2 class="text-4xl font-bold mb-4" style="color: ${color}">${teamName} Wins!</h2>
       <p class="text-gray-300 mb-6">All bases are under ${teamName} team control</p>
+      <div style="text-align:left;margin:0 auto 16px auto;max-width:420px;border:1px solid #374151;border-radius:8px;background:#111827;">
+        <div style="padding:8px 10px;border-bottom:1px solid #374151;color:#e5e7eb;font-weight:bold;display:flex;justify-content:space-between;">
+          <span>Top Players</span>
+          <span style="color:#9ca3af;font-weight:normal;">K/D</span>
+        </div>
+        ${leaderboardHtml}
+      </div>
       <a href="/" class="inline-block px-6 py-3 rounded font-medium transition-colors" 
          style="background: ${color}; color: white;">Create New Game</a>
     `;
@@ -1283,6 +1344,93 @@ class BoloClientWorld extends ClientWorld {
     document.body.appendChild(overlay);
 
     this.startConfetti(winner);
+  }
+
+  getEndGameTankIcon(teamIndex: number, fallbackColor: string): string {
+    const cacheKey = Number.isFinite(teamIndex) ? teamIndex : -1;
+    if (this.endGameTankIconCache[cacheKey]) {
+      return this.endGameTankIconCache[cacheKey];
+    }
+
+    const styled = this.renderer?.images?.styled as HTMLImageElement | undefined;
+    const overlay = this.renderer?.images?.overlay as HTMLImageElement | undefined;
+    if (!styled || !overlay || !styled.width || !styled.height || !overlay.width || !overlay.height) {
+      const fallback = `<span style="display:inline-block;width:18px;height:12px;border-radius:2px;background:${fallbackColor};flex:none;"></span>`;
+      this.endGameTankIconCache[cacheKey] = fallback;
+      return fallback;
+    }
+
+    const tint = (teamIndex >= 0 && teamIndex < SELECTABLE_TEAM_COLORS.length)
+      ? SELECTABLE_TEAM_COLORS[teamIndex]
+      : { r: 156, g: 163, b: 175, name: 'fallback' };
+
+    const sourceCanvas = document.createElement('canvas');
+    sourceCanvas.width = styled.width;
+    sourceCanvas.height = styled.height;
+    const sourceCtx = sourceCanvas.getContext('2d');
+    if (!sourceCtx) {
+      const fallback = `<span style="display:inline-block;width:18px;height:12px;border-radius:2px;background:${fallbackColor};flex:none;"></span>`;
+      this.endGameTankIconCache[cacheKey] = fallback;
+      return fallback;
+    }
+
+    sourceCtx.globalCompositeOperation = 'copy';
+    sourceCtx.drawImage(styled, 0, 0);
+    const styledData = sourceCtx.getImageData(0, 0, styled.width, styled.height);
+
+    const overlayCanvas = document.createElement('canvas');
+    overlayCanvas.width = overlay.width;
+    overlayCanvas.height = overlay.height;
+    const overlayCtx = overlayCanvas.getContext('2d');
+    if (!overlayCtx) {
+      const fallback = `<span style="display:inline-block;width:18px;height:12px;border-radius:2px;background:${fallbackColor};flex:none;"></span>`;
+      this.endGameTankIconCache[cacheKey] = fallback;
+      return fallback;
+    }
+    overlayCtx.globalCompositeOperation = 'copy';
+    overlayCtx.drawImage(overlay, 0, 0);
+    const overlayData = overlayCtx.getImageData(0, 0, overlay.width, overlay.height).data;
+
+    const data = styledData.data;
+    const length = Math.min(data.length, overlayData.length);
+    for (let i = 0; i < length; i += 4) {
+      const factor = overlayData[i] / 255;
+      data[i] = Math.round(factor * tint.r + (1 - factor) * data[i]);
+      data[i + 1] = Math.round(factor * tint.g + (1 - factor) * data[i + 1]);
+      data[i + 2] = Math.round(factor * tint.b + (1 - factor) * data[i + 2]);
+      data[i + 3] = Math.min(255, data[i + 3] + overlayData[i]);
+    }
+    sourceCtx.putImageData(styledData, 0, 0);
+
+    const iconCanvas = document.createElement('canvas');
+    iconCanvas.width = 20;
+    iconCanvas.height = 14;
+    const iconCtx = iconCanvas.getContext('2d');
+    if (!iconCtx) {
+      const fallback = `<span style="display:inline-block;width:18px;height:12px;border-radius:2px;background:${fallbackColor};flex:none;"></span>`;
+      this.endGameTankIconCache[cacheKey] = fallback;
+      return fallback;
+    }
+
+    // Tank sprite tile (fixed east-facing direction, land tile row).
+    const tx = 4;
+    const ty = 0;
+    iconCtx.imageSmoothingEnabled = false;
+    iconCtx.drawImage(
+      sourceCanvas,
+      tx * TILE_SIZE_PIXELS,
+      ty * TILE_SIZE_PIXELS,
+      TILE_SIZE_PIXELS,
+      TILE_SIZE_PIXELS,
+      2,
+      -1,
+      16,
+      16
+    );
+
+    const html = `<img src="${iconCanvas.toDataURL('image/png')}" alt="" width="20" height="14" style="display:block;flex:none;image-rendering:pixelated;" />`;
+    this.endGameTankIconCache[cacheKey] = html;
+    return html;
   }
 
   startConfetti(team: string): void {

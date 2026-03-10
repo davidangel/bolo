@@ -55,6 +55,7 @@ class BoloServerWorld extends ServerWorld {
   authority: boolean = true;
   clients: WebSocket[] = [];
   oddTick: boolean = false;
+  teamScoresTick: number = 0;
   gameOverTimer: number | null = null;
   gameEndLogged: boolean = false;
   winningTeam: string | null = null;
@@ -345,6 +346,47 @@ class BoloServerWorld extends ServerWorld {
 
   //### Helpers
 
+  calculateTeamScores(): number[] {
+    const teamScores = [0, 0, 0, 0, 0, 0];
+    const baseCounts = [0, 0, 0, 0, 0, 0];
+    const pillCounts = [0, 0, 0, 0, 0, 0];
+    let totalBases = 0;
+    let totalPills = 0;
+
+    for (const base of this.map.bases as any[]) {
+      if (base.team != null && base.team !== 255 && base.team >= 0 && base.team <= 5) {
+        baseCounts[base.team]++;
+        totalBases++;
+      }
+    }
+
+    for (const pill of this.map.pills as any[]) {
+      if (pill.team != null && pill.team !== 255 && pill.team >= 0 && pill.team <= 5) {
+        pillCounts[pill.team]++;
+        totalPills++;
+      }
+    }
+
+    const teamKills = [0, 0, 0, 0, 0, 0];
+    const teamDeaths = [0, 0, 0, 0, 0, 0];
+    for (const tank of this.tanks as any[]) {
+      if (tank.team >= 0 && tank.team <= 5) {
+        teamKills[tank.team] += tank.kills || 0;
+        teamDeaths[tank.team] += tank.deaths || 0;
+      }
+    }
+
+    for (let team = 0; team < 6; team++) {
+      const baseScore = totalBases > 0 ? (baseCounts[team] / totalBases) * 100 : 0;
+      const pillScore = totalPills > 0 ? (pillCounts[team] / totalPills) * 100 : 0;
+      const kd = teamDeaths[team] > 0 ? (teamKills[team] / teamDeaths[team]) : teamKills[team];
+      const combatScore = Math.min(kd / 3.0, 1.0) * 100;
+      teamScores[team] = (baseScore * 0.50) + (pillScore * 0.30) + (combatScore * 0.20);
+    }
+
+    return teamScores;
+  }
+
   // Simple helper to send a message to everyone.
   broadcast(message: string): void {
     for (const client of this.clients) {
@@ -366,12 +408,33 @@ class BoloServerWorld extends ServerWorld {
       largePacket = Buffer.from(large).toString('base64');
     }
 
+    this.teamScoresTick++;
+    let teamScoresPacket: string | null = null;
+    if (this.teamScoresTick >= 25) {
+      this.teamScoresTick = 0;
+      const scores = this.calculateTeamScores();
+      const packedScores = pack(
+        'HHHHHH',
+        Math.round(scores[0] * 100),
+        Math.round(scores[1] * 100),
+        Math.round(scores[2] * 100),
+        Math.round(scores[3] * 100),
+        Math.round(scores[4] * 100),
+        Math.round(scores[5] * 100)
+      );
+      const teamScoresData = [net.TEAMSCORES_MESSAGE].concat(packedScores);
+      teamScoresPacket = Buffer.from(teamScoresData).toString('base64');
+    }
+
     for (const client of this.clients) {
       if ((client as any).heartbeatTimer > 40) {
         client.send(smallPacket);
       } else {
         client.send(largePacket);
         (client as any).heartbeatTimer++;
+      }
+      if (teamScoresPacket) {
+        client.send(teamScoresPacket);
       }
     }
   }

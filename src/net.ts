@@ -11,6 +11,7 @@ export const UPDATE_MESSAGE      = 'U'.charCodeAt(0);
 export const TINY_UPDATE_MESSAGE = 'u'.charCodeAt(0);
 export const SOUNDEFFECT_MESSAGE = 'S'.charCodeAt(0);
 export const MINEOWNER_MESSAGE   = 'm'.charCodeAt(0);
+export const TEAMSCORES_MESSAGE  = 'T'.charCodeAt(0);
 
 // Client messages. The client sends one-character ASCII messages.
 export const START_TURNING_CCW  = 'L'; export const STOP_TURNING_CCW  = 'l';
