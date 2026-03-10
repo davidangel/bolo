@@ -1326,6 +1326,8 @@ class BoloClientWorld extends ClientWorld {
     const dialog = document.createElement('div');
     dialog.className = 'bg-gray-800 rounded-lg shadow-2xl p-8 text-center border-4';
     dialog.style.borderColor = color;
+    dialog.style.position = 'relative';
+    dialog.style.zIndex = '2';
     dialog.innerHTML = `
       <h2 class="text-4xl font-bold mb-4" style="color: ${color}">${teamName} Wins!</h2>
       <p class="text-gray-300 mb-6">All bases are under ${teamName} team control</p>
@@ -1343,7 +1345,7 @@ class BoloClientWorld extends ClientWorld {
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
 
-    this.startConfetti(winner);
+    this.startConfetti(winner, overlay as HTMLElement);
   }
 
   getEndGameTankIcon(teamIndex: number, fallbackColor: string): string {
@@ -1433,12 +1435,16 @@ class BoloClientWorld extends ClientWorld {
     return html;
   }
 
-  startConfetti(team: string): void {
+  startConfetti(team: string, container?: HTMLElement): void {
     const color = winnerColorHex(team);
     const canvas = document.createElement('canvas');
     canvas.id = 'confetti-canvas';
-    canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;';
-    document.body.appendChild(canvas);
+    canvas.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;';
+    const target = container || document.body;
+    if (target === document.body) {
+      canvas.style.position = 'fixed';
+    }
+    target.appendChild(canvas);
 
     const ctx = canvas.getContext('2d')!;
     canvas.width = window.innerWidth;
