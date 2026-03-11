@@ -155,8 +155,7 @@ class BoloServerWorld extends ServerWorld {
     (ws as any).on('close', (e: any) => this.onEnd(ws, e.code, e.reason));
 
     // Send the current map state.
-    let packet: any = this.map.dump({ noPills: true, noBases: true });
-    packet = Buffer.from(packet).toString('base64');
+    const packet = Buffer.from(this.map.dump({ noPills: true, noBases: true }));
     ws.send(packet);
 
     // Send mineOwner info for all cells with non-neutral mines.
@@ -171,7 +170,7 @@ class BoloServerWorld extends ServerWorld {
       for (const [x, y, mineOwner] of mineOwnerChanges) {
         pkt = pkt.concat(pack('BBB', x, y, mineOwner));
       }
-      ws.send(Buffer.from(pkt).toString('base64'));
+      ws.send(Buffer.from(pkt));
     }
 
     // Synchronize the object list to the client.
@@ -180,7 +179,7 @@ class BoloServerWorld extends ServerWorld {
       pkt = pkt.concat([net.CREATE_MESSAGE, (obj as any)._net_type_idx]);
     }
     pkt = pkt.concat([net.UPDATE_MESSAGE], this.dumpTick(true));
-    ws.send(Buffer.from(pkt).toString('base64'));
+    ws.send(Buffer.from(pkt));
 
     // Synchronize all player names.
     const messages = this.tanks.map((tank: any) => ({ command: 'nick', idx: tank.idx, nick: tank.name }));
@@ -189,7 +188,7 @@ class BoloServerWorld extends ServerWorld {
     ws.send(JSON.stringify({ command: 'settings', game: this.gameSettings }));
 
     // Finish with a 'sync' message.
-    ws.send(Buffer.from([net.SYNC_MESSAGE]).toString('base64'));
+    ws.send(Buffer.from([net.SYNC_MESSAGE]));
 
     if (this.gameEndLogged && this.winningTeam) {
       ws.send(JSON.stringify({ command: 'gameEnd', winner: this.winningTeam }));
@@ -309,15 +308,14 @@ class BoloServerWorld extends ServerWorld {
     }
     const teamName = SELECTABLE_TEAM_COLORS[message.team]?.name || 'unknown';
     gameLogger.playerJoined(this.gid, message.nick, teamName);
-    let packet: any = this.changesPacket(true);
-    packet = Buffer.from(packet).toString('base64');
+    const packet = Buffer.from(this.changesPacket(true));
     this.broadcast(packet);
 
     (ws as any).tank.name = message.nick;
     this.broadcast(JSON.stringify({ command: 'nick', idx: (ws as any).tank.idx, nick: message.nick }));
 
     const welcome = pack('BH', net.WELCOME_MESSAGE, (ws as any).tank.idx);
-    ws.send(Buffer.from(welcome).toString('base64'));
+    ws.send(Buffer.from(welcome));
   }
 
   onTextMessage(ws: WebSocket, tank: any, message: any): void {
@@ -388,7 +386,7 @@ class BoloServerWorld extends ServerWorld {
   }
 
   // Simple helper to send a message to everyone.
-  broadcast(message: string): void {
+  broadcast(message: string | Buffer): void {
     for (const client of this.clients) {
       client.send(message);
     }
@@ -396,20 +394,20 @@ class BoloServerWorld extends ServerWorld {
 
   // We send critical updates every frame, and non-critical updates every other frame.
   sendPackets(): void {
-    let largePacket: string, smallPacket: string;
+    let largePacket: Buffer, smallPacket: Buffer;
     if ((this.oddTick = !this.oddTick)) {
-      const p = Buffer.from(this.changesPacket(true)).toString('base64');
+      const p = Buffer.from(this.changesPacket(true));
       smallPacket = p;
       largePacket = p;
     } else {
       const changes = this.changesPacket(false);
       const large = changes.concat(this.updatePacket());
-      smallPacket = Buffer.from(changes).toString('base64');
-      largePacket = Buffer.from(large).toString('base64');
+      smallPacket = Buffer.from(changes);
+      largePacket = Buffer.from(large);
     }
 
     this.teamScoresTick++;
-    let teamScoresPacket: string | null = null;
+    let teamScoresPacket: Buffer | null = null;
     if (this.teamScoresTick >= 25) {
       this.teamScoresTick = 0;
       const scores = this.calculateTeamScores();
@@ -423,7 +421,7 @@ class BoloServerWorld extends ServerWorld {
         Math.round(scores[5] * 100)
       );
       const teamScoresData = [net.TEAMSCORES_MESSAGE].concat(packedScores);
-      teamScoresPacket = Buffer.from(teamScoresData).toString('base64');
+      teamScoresPacket = Buffer.from(teamScoresData);
     }
 
     for (const client of this.clients) {

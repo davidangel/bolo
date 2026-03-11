@@ -1,7 +1,7 @@
 // Bolo uses two WebSocket connections during play. The first is the lobby connection, which is
 // always open, and is also used for in-game chat. The second is used for world synchronization.
 
-// Server message identifiers. The server sends binary data (encoded as base64).
+// Server message identifiers. The server sends binary data.
 export const SYNC_MESSAGE        = 's'.charCodeAt(0);
 export const WELCOME_MESSAGE     = 'W'.charCodeAt(0);
 export const CREATE_MESSAGE      = 'C'.charCodeAt(0);

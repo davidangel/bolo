@@ -393,6 +393,7 @@ class BoloClientWorld extends ClientWorld {
       const path = `/${m[1]}`;
       const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
       this.ws = new WebSocket(`${wsProtocol}//${location.host}${path}`);
+      this.ws.binaryType = 'arraybuffer';
       this.ws.addEventListener('open', () => this.connected());
       this.ws.addEventListener('close', () => this.failure('Connection lost'));
       return;
@@ -577,7 +578,7 @@ class BoloClientWorld extends ClientWorld {
 
   // Callback after the map was received.
   receiveMap(e: MessageEvent): void {
-    this.map = WorldMap.load(decodeBase64(e.data));
+    this.map = WorldMap.load(this.parseBinaryPayload(e.data));
     this.commonInitialization();
     this.vignette.message('Waiting for the game state');
     this._messageHandler = (e: MessageEvent) => this.handleMessage(e);
@@ -901,15 +902,29 @@ class BoloClientWorld extends ClientWorld {
 
   //### Network message handlers.
 
+  parseBinaryPayload(data: any): number[] {
+    if (data instanceof ArrayBuffer) {
+      return Array.from(new Uint8Array(data));
+    }
+    if (ArrayBuffer.isView(data)) {
+      return Array.from(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+    }
+    if (typeof data === 'string') {
+      // Backward compatibility with older servers that still send base64-encoded packets.
+      return decodeBase64(data);
+    }
+    throw new Error('Unsupported binary payload type from server');
+  }
+
   handleMessage(e: MessageEvent): void {
     let error: Error | null = null;
-    if (e.data.charAt(0) === '{') {
+    if (typeof e.data === 'string' && e.data.charAt(0) === '{') {
       try {
         this.handleJsonCommand(JSON.parse(e.data));
       } catch (err) {
         error = err as Error;
       }
-    } else if (e.data.charAt(0) === '[') {
+    } else if (typeof e.data === 'string' && e.data.charAt(0) === '[') {
       try {
         for (const message of JSON.parse(e.data)) {
           this.handleJsonCommand(message);
@@ -920,8 +935,7 @@ class BoloClientWorld extends ClientWorld {
     } else {
       this.netRestore();
       try {
-        const dataRaw = decodeBase64(e.data);
-        const data = Array.from(dataRaw) as number[];
+        const data = this.parseBinaryPayload(e.data);
         let pos = 0;
         const { length } = data;
         this.processingServerMessages = true;
