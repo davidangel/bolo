@@ -192,6 +192,57 @@ describe('server application game settings', () => {
     }
   });
 
+  test('rejects invalid join messages without spawning a tank', () => {
+    const app = createBoloApp({
+      general: { base: '', maxgames: 10 },
+      web: { port: 0, log: false },
+    }) as any;
+
+    const map = new Map();
+    const game = app.createGame(Buffer.from(map.dump())) as any;
+    const ws: any = {
+      send: jest.fn(),
+      on: jest.fn(),
+      close: jest.fn(),
+    };
+    const spawnSpy = jest.spyOn(game, 'spawn');
+
+    try {
+      game.onJoinMessage(ws, { nick: 'x'.repeat(21), team: 0 });
+      expect(spawnSpy).not.toHaveBeenCalled();
+      expect(ws.tank).toBeUndefined();
+
+      game.onJoinMessage(ws, { nick: 'Tester', team: 99 });
+      expect(spawnSpy).not.toHaveBeenCalled();
+      expect(ws.tank).toBeUndefined();
+    } finally {
+      spawnSpy.mockRestore();
+      game.close();
+    }
+  });
+
+  test('rejects invalid chat messages without broadcasting them', () => {
+    const app = createBoloApp({
+      general: { base: '', maxgames: 10 },
+      web: { port: 0, log: false },
+    }) as any;
+
+    const map = new Map();
+    const game = app.createGame(Buffer.from(map.dump())) as any;
+    const broadcastSpy = jest.spyOn(game, 'broadcast');
+    const ws: any = { send: jest.fn(), on: jest.fn(), close: jest.fn() };
+    const tank: any = { idx: 7, team: 1 };
+
+    try {
+      game.onTextMessage(ws, tank, { text: 'x'.repeat(141) });
+      game.onTeamTextMessage(ws, tank, { text: 12345 });
+      expect(broadcastSpy).not.toHaveBeenCalled();
+    } finally {
+      broadcastSpy.mockRestore();
+      game.close();
+    }
+  });
+
   test('lists only active public games and excludes ended games', async () => {
     const app = createBoloApp({
       general: { base: '', maxgames: 10 },
@@ -249,6 +300,37 @@ describe('server application game settings', () => {
     }
   });
 
+  test('rate limits repeated create requests from the same client', async () => {
+    const app = createBoloApp({
+      general: { base: 'http://localhost:8124', maxgames: 10 },
+      web: {
+        port: 0,
+        log: false,
+        rateLimit: {
+          create: { windowMs: 60000, maxRequests: 1 },
+        },
+      },
+    }) as any;
+
+    const map = new Map();
+    const tmpMapPath = path.join(os.tmpdir(), `bolo-test-${Date.now()}-${Math.random()}.map`);
+    fs.writeFileSync(tmpMapPath, Buffer.from(map.dump()));
+    app.maps.nameIndex = { 'Test Map': { path: tmpMapPath } };
+
+    try {
+      app.listen(0);
+      const port = (app.httpServer.address() as any).port as number;
+      const first = await request(port, '/create?map=Test%20Map');
+      const second = await request(port, '/create?map=Test%20Map');
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(429);
+      expect(JSON.parse(second.body)).toEqual({ error: 'Too many create requests. Please try again later.' });
+    } finally {
+      app.shutdown();
+      fs.rmSync(tmpMapPath, { force: true });
+    }
+  });
+
   test('rejects websocket upgrades from disallowed origins', () => {
     const app = createBoloApp({
       general: { base: 'http://localhost:8124', maxgames: 10 },
@@ -292,5 +374,104 @@ describe('server application game settings', () => {
 
     expect(allowed).toBe(true);
     expect(denied).toBe(false);
+  });
+
+  test('allows websocket upgrades from matching wildcard subdomains', () => {
+    const app = createBoloApp({
+      general: { base: 'http://localhost:8124', maxgames: 10 },
+      web: { port: 8124, log: false, allowedOrigins: ['https://*.example.com'] },
+    }) as any;
+
+    expect(app.isWebsocketOriginAllowed({
+      headers: { origin: 'https://play.example.com', host: 'localhost:8124' },
+      socket: { encrypted: false },
+    } as any)).toBe(true);
+    expect(app.isWebsocketOriginAllowed({
+      headers: { origin: 'https://staging.play.example.com', host: 'localhost:8124' },
+      socket: { encrypted: false },
+    } as any)).toBe(true);
+    expect(app.isWebsocketOriginAllowed({
+      headers: { origin: 'https://example.com', host: 'localhost:8124' },
+      socket: { encrypted: false },
+    } as any)).toBe(false);
+  });
+
+  test('rate limits repeated websocket upgrades from the same client', () => {
+    const app = createBoloApp({
+      general: { base: 'http://localhost:8124', maxgames: 10 },
+      web: {
+        port: 8124,
+        log: false,
+        rateLimit: {
+          websocket: { windowMs: 60000, maxRequests: 1 },
+        },
+      },
+    }) as any;
+
+    const connection1 = { write: jest.fn(), destroy: jest.fn() };
+    const connection2 = { write: jest.fn(), destroy: jest.fn() };
+    const request = {
+      method: 'GET',
+      url: '/demo',
+      headers: {
+        host: 'localhost:8124',
+        origin: 'http://localhost:8124',
+      },
+      socket: { encrypted: false, remoteAddress: '127.0.0.1' },
+    } as any;
+    const getSocketPathHandlerSpy = jest.spyOn(app, 'getSocketPathHandler').mockReturnValue(() => undefined);
+
+    try {
+      app.handleWebsocket(request, connection1, Buffer.alloc(0));
+      app.handleWebsocket(request, connection2, Buffer.alloc(0));
+      expect(connection2.write).toHaveBeenCalledWith(expect.stringContaining('429 Too Many Requests'));
+      expect(connection2.destroy).toHaveBeenCalledTimes(1);
+    } finally {
+      getSocketPathHandlerSpy.mockRestore();
+    }
+  });
+
+  test('prunes expired rate limit entries', () => {
+    const app = createBoloApp({
+      general: { base: '', maxgames: 10 },
+      web: { port: 0, log: false },
+    }) as any;
+
+    app.createRateLimitState.set('expired', { count: 3, resetAt: 100 });
+    app.createRateLimitState.set('active', { count: 1, resetAt: 1000 });
+    app.websocketRateLimitState.set('expired-ws', { count: 2, resetAt: 100 });
+
+    app.pruneRateLimitState(500);
+
+    expect(app.createRateLimitState.has('expired')).toBe(false);
+    expect(app.createRateLimitState.has('active')).toBe(true);
+    expect(app.websocketRateLimitState.has('expired-ws')).toBe(false);
+  });
+
+  test('closes clients that stop responding to ping requests', () => {
+    const app = createBoloApp({
+      general: { base: '', maxgames: 10 },
+      web: { port: 0, log: false },
+    }) as any;
+
+    const map = new Map();
+    const game = app.createGame(Buffer.from(map.dump())) as any;
+    const ws: any = {
+      awaitingPong: false,
+      lastPingAt: Date.now() - 6000,
+      lastPongAt: Date.now() - 6000,
+      ping: jest.fn(),
+      close: jest.fn(),
+      send: jest.fn(),
+    };
+    game.clients = [ws];
+
+    game.maintainClientConnections();
+    expect(ws.ping).toHaveBeenCalledTimes(1);
+    expect(ws.awaitingPong).toBe(true);
+
+    ws.lastPingAt = Date.now() - 16000;
+    game.maintainClientConnections();
+    expect(ws.close).toHaveBeenCalledWith(4000, 'Heartbeat timeout');
   });
 });

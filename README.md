@@ -72,6 +72,36 @@ This is a browser-based implementation of Bolo. To play:
 
 The server will start on port 8124 by default. Open `http://localhost:8124/` in your browser to play.
 
+### Configuration notes
+
+The server reads its settings from `config.json`. In addition to the basic `general.base`, `general.maxgames`, and `web.port` values, the sample config includes two security-related options:
+
+ * `web.allowedOrigins` - Allowed browser origins for WebSocket upgrades. Supports exact origins like `http://localhost:8124`, wildcard subdomains like `https://*.example.com`, or `*` if you intentionally want to allow any origin.
+ * `web.rateLimit.create` - Per-IP limit for requests to `/create`, configured with `windowMs` and `maxRequests`.
+ * `web.rateLimit.websocket` - Per-IP limit for WebSocket upgrade attempts, also configured with `windowMs` and `maxRequests`.
+
+Rate limiting uses `X-Forwarded-For` when that header is present, otherwise it falls back to the socket remote address. If you run Bolo behind a reverse proxy or load balancer, make sure only trusted infrastructure can set `X-Forwarded-For`, or strip/rewrite that header at the edge so clients cannot spoof their source IPs.
+
+Example:
+
+```json
+{
+   "general": {
+      "base": "https://play.example.com",
+      "maxgames": 10,
+      "gameTimeout": 900
+   },
+   "web": {
+      "port": 8124,
+      "allowedOrigins": ["https://play.example.com", "https://*.example.com"],
+      "rateLimit": {
+         "create": { "windowMs": 60000, "maxRequests": 20 },
+         "websocket": { "windowMs": 60000, "maxRequests": 60 }
+      }
+   }
+}
+```
+
 ### Docker
 
 Alternatively, run the server using Docker:

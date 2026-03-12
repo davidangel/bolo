@@ -48,6 +48,9 @@ const parseBooleanParam = (value: string | null, fallback: boolean): boolean => 
   return fallback;
 };
 
+const CLIENT_PING_INTERVAL_MS = 5000;
+const CLIENT_PONG_TIMEOUT_MS = 15000;
+
 
 //# Server world
 
@@ -150,7 +153,9 @@ class BoloServerWorld extends ServerWorld {
   onConnect(ws: WebSocket): void {
     this.clients.push(ws);
     this.lastActivity = Date.now();
-    (ws as any).heartbeatTimer = 0;
+    (ws as any).lastPingAt = Date.now();
+    (ws as any).lastPongAt = Date.now();
+    (ws as any).awaitingPong = false;
     (ws as any).on('message', (e: any) => this.onMessage(ws, e.data));
     (ws as any).on('close', (e: any) => this.onEnd(ws, e.code, e.reason));
 
@@ -206,8 +211,10 @@ class BoloServerWorld extends ServerWorld {
 
   onMessage(ws: WebSocket, message: string): void {
     this.lastActivity = Date.now();
+    (ws as any).lastPongAt = Date.now();
+    (ws as any).awaitingPong = false;
     if (message === '') {
-      (ws as any).heartbeatTimer = 0;
+      return;
     } else if (message.charAt(0) === '{') {
       this.onJsonMessage(ws, message);
     } else {
@@ -297,9 +304,11 @@ class BoloServerWorld extends ServerWorld {
   onJoinMessage(ws: WebSocket, message: any): void {
     if (typeof message.nick !== 'string' || message.nick.length > 20) {
       this.onError(ws, new Error("Client specified invalid nickname."));
+      return;
     }
     if (typeof message.team !== 'number' || message.team < 0 || message.team >= SELECTABLE_TEAM_COLORS.length) {
       this.onError(ws, new Error("Client specified invalid team."));
+      return;
     }
 
     (ws as any).tank = this.spawn(Tank, message.team);
@@ -321,6 +330,7 @@ class BoloServerWorld extends ServerWorld {
   onTextMessage(ws: WebSocket, tank: any, message: any): void {
     if (typeof message.text !== 'string' || message.text.length > 140) {
       this.onError(ws, new Error("Client sent an invalid text message."));
+      return;
     }
     this.broadcast(JSON.stringify({ command: 'msg', idx: tank.idx, text: message.text }));
   }
@@ -328,6 +338,7 @@ class BoloServerWorld extends ServerWorld {
   onTeamTextMessage(ws: WebSocket, tank: any, message: any): void {
     if (typeof message.text !== 'string' || message.text.length > 140) {
       this.onError(ws, new Error("Client sent an invalid text message."));
+      return;
     }
     if (tank.team === 255) { return; }
     const out = JSON.stringify({ command: 'teamMsg', idx: tank.idx, text: message.text });
@@ -392,18 +403,37 @@ class BoloServerWorld extends ServerWorld {
     }
   }
 
+  maintainClientConnections(): void {
+    const now = Date.now();
+    for (const client of [...this.clients]) {
+      const socket = client as any;
+      if (socket.awaitingPong && (now - socket.lastPingAt) >= CLIENT_PONG_TIMEOUT_MS) {
+        this.onError(client, new Error('Client heartbeat timed out.'));
+        client.close(4000, 'Heartbeat timeout');
+        continue;
+      }
+      if (socket.awaitingPong || (now - socket.lastPingAt) < CLIENT_PING_INTERVAL_MS) {
+        continue;
+      }
+
+      socket.awaitingPong = true;
+      socket.lastPingAt = now;
+      socket.ping('hb', () => {
+        socket.awaitingPong = false;
+        socket.lastPongAt = Date.now();
+      });
+    }
+  }
+
   // We send critical updates every frame, and non-critical updates every other frame.
   sendPackets(): void {
-    let largePacket: Buffer, smallPacket: Buffer;
+    this.maintainClientConnections();
+
+    let packet: Buffer;
     if ((this.oddTick = !this.oddTick)) {
-      const p = Buffer.from(this.changesPacket(true));
-      smallPacket = p;
-      largePacket = p;
+      packet = Buffer.from(this.changesPacket(true));
     } else {
-      const changes = this.changesPacket(false);
-      const large = changes.concat(this.updatePacket());
-      smallPacket = Buffer.from(changes);
-      largePacket = Buffer.from(large);
+      packet = Buffer.from(this.changesPacket(false).concat(this.updatePacket()));
     }
 
     this.teamScoresTick++;
@@ -425,12 +455,10 @@ class BoloServerWorld extends ServerWorld {
     }
 
     for (const client of this.clients) {
-      if ((client as any).heartbeatTimer > 40) {
-        client.send(smallPacket);
-      } else {
-        client.send(largePacket);
-        (client as any).heartbeatTimer++;
+      if ((client as any).readyState != null && (client as any).readyState !== 1) {
+        continue;
       }
+      client.send(packet);
       if (teamScoresPacket) {
         client.send(teamScoresPacket);
       }
@@ -504,9 +532,39 @@ interface AppOptions {
     port: number;
     log?: boolean;
     allowedOrigins?: string[];
+    rateLimit?: {
+      create?: {
+        windowMs?: number;
+        maxRequests?: number;
+      };
+      websocket?: {
+        windowMs?: number;
+        maxRequests?: number;
+      };
+    };
   };
   irc?: Record<string, any>;
 }
+
+interface RateLimitWindow {
+  count: number;
+  resetAt: number;
+}
+
+interface RateLimitConfig {
+  windowMs: number;
+  maxRequests: number;
+}
+
+const DEFAULT_CREATE_RATE_LIMIT: RateLimitConfig = {
+  windowMs: 60 * 1000,
+  maxRequests: 20,
+};
+
+const DEFAULT_WEBSOCKET_RATE_LIMIT: RateLimitConfig = {
+  windowMs: 60 * 1000,
+  maxRequests: 60,
+};
 
 class Application {
   options: AppOptions;
@@ -517,6 +575,8 @@ class Application {
   demo: BoloServerWorld | null = null;
   loop: any;
   httpServer!: http.Server;
+  createRateLimitState: Map<string, RateLimitWindow> = new Map();
+  websocketRateLimitState: Map<string, RateLimitWindow> = new Map();
 
   constructor(options: AppOptions) {
     this.tick = this.tick.bind(this);
@@ -567,6 +627,11 @@ class Application {
     // Endpoint to create a new game and return its id.
     this.connectServer.use('/create', (req: any, res: any, next: any) => {
       if (req.method !== 'GET') { return next(); }
+      if (this.isRateLimited(req, 'create')) {
+        res.writeHead(429, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Too many create requests. Please try again later.' }));
+        return;
+      }
       if (!this.haveOpenSlots()) {
         res.writeHead(503, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'All game slots are full.' }));
@@ -732,6 +797,7 @@ class Application {
   }
 
   tick(): void {
+    this.pruneRateLimitState();
     for (const gid in this.games) {
       this.games[gid].tick();
     }
@@ -751,6 +817,103 @@ class Application {
   }
 
   //### WebSocket handling
+
+  normalizeRateLimitConfig(config: { windowMs?: number; maxRequests?: number } | undefined, fallback: RateLimitConfig): RateLimitConfig {
+    return {
+      windowMs: typeof config?.windowMs === 'number' && config.windowMs > 0 ? config.windowMs : fallback.windowMs,
+      maxRequests: typeof config?.maxRequests === 'number' && config.maxRequests > 0 ? config.maxRequests : fallback.maxRequests,
+    };
+  }
+
+  getRateLimitConfig(kind: 'create' | 'websocket'): RateLimitConfig {
+    if (kind === 'create') {
+      return this.normalizeRateLimitConfig(this.options.web.rateLimit?.create, DEFAULT_CREATE_RATE_LIMIT);
+    }
+    return this.normalizeRateLimitConfig(this.options.web.rateLimit?.websocket, DEFAULT_WEBSOCKET_RATE_LIMIT);
+  }
+
+  getClientAddress(request: http.IncomingMessage): string {
+    const forwarded = request.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string' && forwarded.trim().length > 0) {
+      return forwarded.split(',')[0].trim();
+    }
+    return request.socket.remoteAddress || 'unknown';
+  }
+
+  pruneRateLimitBucket(bucket: Map<string, RateLimitWindow>, now: number = Date.now()): void {
+    for (const [key, entry] of bucket.entries()) {
+      if (entry.resetAt <= now) {
+        bucket.delete(key);
+      }
+    }
+  }
+
+  pruneRateLimitState(now: number = Date.now()): void {
+    this.pruneRateLimitBucket(this.createRateLimitState, now);
+    this.pruneRateLimitBucket(this.websocketRateLimitState, now);
+  }
+
+  consumeRateLimit(bucket: Map<string, RateLimitWindow>, key: string, config: RateLimitConfig): boolean {
+    const now = Date.now();
+    this.pruneRateLimitBucket(bucket, now);
+    const current = bucket.get(key);
+    if (!current || current.resetAt <= now) {
+      bucket.set(key, { count: 1, resetAt: now + config.windowMs });
+      return false;
+    }
+    current.count += 1;
+    if (current.count > config.maxRequests) {
+      return true;
+    }
+    bucket.set(key, current);
+    return false;
+  }
+
+  isRateLimited(request: http.IncomingMessage, kind: 'create' | 'websocket'): boolean {
+    const key = this.getClientAddress(request);
+    const config = this.getRateLimitConfig(kind);
+    const bucket = kind === 'create' ? this.createRateLimitState : this.websocketRateLimitState;
+    return this.consumeRateLimit(bucket, key, config);
+  }
+
+  originPatternMatches(pattern: string, origin: string): boolean {
+    const trimmed = pattern.trim();
+    if (trimmed === '*') {
+      return true;
+    }
+
+    if (!trimmed.includes('*')) {
+      try {
+        return new URL(trimmed).origin === origin;
+      } catch (_err) {
+        // Fall through to wildcard matching.
+      }
+    }
+
+    const wildcardMatch = /^(https?):\/\/\*\.([^/:]+)(?::(\d+))?$/.exec(trimmed);
+    if (!wildcardMatch) {
+      return false;
+    }
+
+    const [, protocol, domainSuffix, port] = wildcardMatch;
+    let parsedOrigin: URL;
+    try {
+      parsedOrigin = new URL(origin);
+    } catch (_err) {
+      return false;
+    }
+
+    if (parsedOrigin.protocol !== `${protocol}:`) {
+      return false;
+    }
+    if (!parsedOrigin.hostname.endsWith(`.${domainSuffix}`) || parsedOrigin.hostname === domainSuffix) {
+      return false;
+    }
+    if (port && parsedOrigin.port !== port) {
+      return false;
+    }
+    return true;
+  }
 
   websocketAllowedOrigins(request: http.IncomingMessage): string[] {
     const configured = Array.isArray(this.options.web.allowedOrigins)
@@ -801,7 +964,7 @@ class Application {
       return false;
     }
 
-    return this.websocketAllowedOrigins(request).includes(normalizedOrigin);
+    return this.websocketAllowedOrigins(request).some((allowedOrigin) => this.originPatternMatches(allowedOrigin, normalizedOrigin));
   }
 
   rejectWebsocket(connection: any, statusCode: number, reason: string): void {
@@ -836,6 +999,10 @@ class Application {
 
   handleWebsocket(request: http.IncomingMessage, connection: any, initialData: Buffer): void {
     if (request.method !== 'GET') { this.rejectWebsocket(connection, 405, 'Method Not Allowed'); return; }
+    if (this.isRateLimited(request, 'websocket')) {
+      this.rejectWebsocket(connection, 429, 'Too Many Requests');
+      return;
+    }
     if (!this.isWebsocketOriginAllowed(request)) {
       this.rejectWebsocket(connection, 403, 'Forbidden');
       return;

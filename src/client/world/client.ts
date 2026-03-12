@@ -338,7 +338,6 @@ class BoloClientWorld extends ClientWorld {
 
   ws: WebSocket | null = null;
   vignette: any = null;
-  heartbeatTimer: number = 0;
   settingsManager: SettingsManager | null = null;
   launchDialog: ModalAPI | null = null;
   joinDialog: ModalAPI | null = null;
@@ -380,7 +379,6 @@ class BoloClientWorld extends ClientWorld {
   loaded(vignette: any): void {
     this.vignette = vignette;
     this.vignette.message('Connecting to the multiplayer game');
-    this.heartbeatTimer = 0;
 
     this.settingsManager = new SettingsManager();
     if (this.soundkit) {
@@ -681,7 +679,6 @@ class BoloClientWorld extends ClientWorld {
     this.map.retile();
   }
 
-  // Send the heartbeat (an empty message) every 10 ticks / 400ms.
   tick(): void {
     super.tick();
 
@@ -695,11 +692,6 @@ class BoloClientWorld extends ClientWorld {
       }
     } else {
       this.rangeAdjustTimer = 0;
-    }
-
-    if (++this.heartbeatTimer === 10) {
-      this.heartbeatTimer = 0;
-      this.ws!.send('');
     }
   }
 
