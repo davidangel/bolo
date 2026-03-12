@@ -1,5 +1,7 @@
 #!/bin/sh
 
+ALLOWED_ORIGINS_JSON=$(node -e 'const raw = process.env.ALLOWED_ORIGINS || process.env.BASE_URL || "http://localhost:8124"; const list = raw.split(",").map(s => s.trim()).filter(Boolean); process.stdout.write(JSON.stringify(list.length ? list : ["http://localhost:8124"]));')
+
 # Generate config.json from environment variables if not mounted
 if [ ! -f /app/config.json ]; then
   echo "Generating config.json from environment..."
@@ -11,7 +13,8 @@ if [ ! -f /app/config.json ]; then
   },
   "web": {
     "port": ${PORT:-8124},
-    "log": true
+    "log": true,
+    "allowedOrigins": ${ALLOWED_ORIGINS_JSON}
   }
 }
 EOF

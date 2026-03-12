@@ -114,6 +114,7 @@ Configure the server using environment variables:
  * `PORT` - Server port (default: 8124)
  * `BASE_URL` - Public URL of the server
  * `MAXGAMES` - Maximum number of games (default: 5)
+ * `ALLOWED_ORIGINS` - Comma-separated origins allowed for WebSocket upgrades (default: same as `BASE_URL`)
 
 ## License
 
