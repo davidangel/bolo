@@ -6,7 +6,8 @@
   },
   "web": {
     "port": 8124,
-    "log": true
+    "log": true,
+    "allowedOrigins": ["http://localhost:8124"]
   },
   "irc": {
     "freenode": {

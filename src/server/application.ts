@@ -503,6 +503,7 @@ interface AppOptions {
   web: {
     port: number;
     log?: boolean;
+    allowedOrigins?: string[];
   };
   irc?: Record<string, any>;
 }
@@ -566,6 +567,11 @@ class Application {
     // Endpoint to create a new game and return its id.
     this.connectServer.use('/create', (req: any, res: any, next: any) => {
       if (req.method !== 'GET') { return next(); }
+      if (!this.haveOpenSlots()) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'All game slots are full.' }));
+        return;
+      }
 
       const urlObj = new URL(req.url, 'http://localhost');
       const mapName = urlObj.searchParams.get('map');
@@ -746,6 +752,65 @@ class Application {
 
   //### WebSocket handling
 
+  websocketAllowedOrigins(request: http.IncomingMessage): string[] {
+    const configured = Array.isArray(this.options.web.allowedOrigins)
+      ? this.options.web.allowedOrigins.map((origin) => origin.trim()).filter((origin) => origin.length > 0)
+      : [];
+    if (configured.length > 0) {
+      return configured;
+    }
+
+    const allowedOrigins = new Set<string>();
+    const addOrigin = (value?: string): void => {
+      if (!value) {
+        return;
+      }
+      try {
+        allowedOrigins.add(new URL(value).origin);
+      } catch (_err) {
+        return;
+      }
+    };
+
+    addOrigin(this.options.general.base);
+    const host = request.headers.host;
+    if (typeof host === 'string' && host.length > 0) {
+      const protocol = (request.socket as any)?.encrypted ? 'https' : 'http';
+      addOrigin(`${protocol}://${host}`);
+    }
+    if (this.options.web.port > 0) {
+      addOrigin(`http://localhost:${this.options.web.port}`);
+      addOrigin(`http://127.0.0.1:${this.options.web.port}`);
+      addOrigin(`https://localhost:${this.options.web.port}`);
+      addOrigin(`https://127.0.0.1:${this.options.web.port}`);
+    }
+
+    return Array.from(allowedOrigins);
+  }
+
+  isWebsocketOriginAllowed(request: http.IncomingMessage): boolean {
+    const origin = request.headers.origin;
+    if (typeof origin !== 'string' || origin.length === 0) {
+      return true;
+    }
+
+    let normalizedOrigin: string;
+    try {
+      normalizedOrigin = new URL(origin).origin;
+    } catch (_err) {
+      return false;
+    }
+
+    return this.websocketAllowedOrigins(request).includes(normalizedOrigin);
+  }
+
+  rejectWebsocket(connection: any, statusCode: number, reason: string): void {
+    if (typeof connection?.write === 'function') {
+      connection.write(`HTTP/1.1 ${statusCode} ${reason}\r\nConnection: close\r\n\r\n`);
+    }
+    connection.destroy();
+  }
+
   getSocketPathHandler(urlPath: string): ((ws: WebSocket) => void) | false {
     let m: RegExpExecArray | null;
     if (urlPath === '/lobby') {
@@ -770,11 +835,15 @@ class Application {
   }
 
   handleWebsocket(request: http.IncomingMessage, connection: any, initialData: Buffer): void {
-    if (request.method !== 'GET') { connection.destroy(); return; }
+    if (request.method !== 'GET') { this.rejectWebsocket(connection, 405, 'Method Not Allowed'); return; }
+    if (!this.isWebsocketOriginAllowed(request)) {
+      this.rejectWebsocket(connection, 403, 'Forbidden');
+      return;
+    }
 
     const urlPath = request.url || '';
     const handler = this.getSocketPathHandler(urlPath);
-    if (handler === false) { connection.destroy(); return; }
+    if (handler === false) { this.rejectWebsocket(connection, 404, 'Not Found'); return; }
 
     const ws = new WebSocket(request, connection, initialData);
     handler(ws);

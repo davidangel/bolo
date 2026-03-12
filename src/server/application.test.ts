@@ -57,6 +57,20 @@ const requestJson = (port: number, requestPath: string): Promise<any> => {
   });
 };
 
+const request = (port: number, requestPath: string): Promise<{ statusCode: number; body: string }> => {
+  return new Promise((resolve, reject) => {
+    const req = http.get({ hostname: '127.0.0.1', port, path: requestPath }, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        resolve({ statusCode: res.statusCode || 0, body });
+      });
+    });
+    req.on('error', reject);
+  });
+};
+
 describe('server application game end', () => {
   test('logs gameEnd once with single-team control', () => {
     const app = createBoloApp({
@@ -209,5 +223,74 @@ describe('server application game settings', () => {
     } finally {
       app.shutdown();
     }
+  });
+
+  test('rejects create requests when max game slots are full', async () => {
+    const app = createBoloApp({
+      general: { base: 'http://localhost:8124', maxgames: 1 },
+      web: { port: 0, log: false },
+    }) as any;
+
+    const map = new Map();
+    const tmpMapPath = path.join(os.tmpdir(), `bolo-test-${Date.now()}-${Math.random()}.map`);
+    fs.writeFileSync(tmpMapPath, Buffer.from(map.dump()));
+    app.maps.nameIndex = { 'Test Map': { path: tmpMapPath } };
+    app.createGame(Buffer.from(map.dump()));
+
+    try {
+      app.listen(0);
+      const port = (app.httpServer.address() as any).port as number;
+      const response = await request(port, '/create?map=Test%20Map');
+      expect(response.statusCode).toBe(503);
+      expect(JSON.parse(response.body)).toEqual({ error: 'All game slots are full.' });
+    } finally {
+      app.shutdown();
+      fs.rmSync(tmpMapPath, { force: true });
+    }
+  });
+
+  test('rejects websocket upgrades from disallowed origins', () => {
+    const app = createBoloApp({
+      general: { base: 'http://localhost:8124', maxgames: 10 },
+      web: { port: 8124, log: false },
+    }) as any;
+
+    const request = {
+      method: 'GET',
+      url: '/demo',
+      headers: {
+        host: 'localhost:8124',
+        origin: 'https://evil.example',
+      },
+      socket: { encrypted: false },
+    } as any;
+    const connection = {
+      write: jest.fn(),
+      destroy: jest.fn(),
+    };
+
+    app.handleWebsocket(request, connection, Buffer.alloc(0));
+
+    expect(connection.write).toHaveBeenCalledWith(expect.stringContaining('403 Forbidden'));
+    expect(connection.destroy).toHaveBeenCalledTimes(1);
+  });
+
+  test('allows websocket upgrades from configured allowed origins', () => {
+    const app = createBoloApp({
+      general: { base: 'http://localhost:8124', maxgames: 10 },
+      web: { port: 8124, log: false, allowedOrigins: ['https://play.example.com'] },
+    }) as any;
+
+    const allowed = app.isWebsocketOriginAllowed({
+      headers: { origin: 'https://play.example.com', host: 'localhost:8124' },
+      socket: { encrypted: false },
+    } as any);
+    const denied = app.isWebsocketOriginAllowed({
+      headers: { origin: 'https://evil.example', host: 'localhost:8124' },
+      socket: { encrypted: false },
+    } as any);
+
+    expect(allowed).toBe(true);
+    expect(denied).toBe(false);
   });
 });
